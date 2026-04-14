@@ -1,0 +1,20 @@
+{
+  "name": "@baju-kurung/infra",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "cdk deploy --all",
+    "deploy:staging": "cdk deploy --all --context env=staging",
+    "deploy:production": "cdk deploy --all --context env=production",
+    "synth": "cdk synth",
+    "diff": "cdk diff"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.0.0",
+    "constructs": "^10.0.0"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.0.0",
+    "typescript": "^5.0.0"
+  }
+}

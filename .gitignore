@@ -1,0 +1,21 @@
+# Kiro & VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# AWS / CDK
+node_modules/
+cdk.out/
+.env
+*.log
+
+# Build outputs
+dist/
+build/
+
+# Vite
+*.local
+
+# If Kiro generates a specific local cache
+.kiro/cache/

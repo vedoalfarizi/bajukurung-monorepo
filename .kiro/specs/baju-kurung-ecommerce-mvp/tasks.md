@@ -6,7 +6,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
 
 ## Tasks
 
-- [ ] 1. Project scaffolding and shared types
+- [x] 1. Project scaffolding and shared types
   - Initialise a monorepo with two workspaces: `backend/` (Node.js/TypeScript Lambda) and `frontend/` (React/TypeScript Vite SPA)
   - Define shared TypeScript types: `StandardSize`, `Occasion`, `OrderStatus`, `Product`, `Order`, `CartItem`, `Cart`, `LineItem`, `SizeChart`
   - Configure TypeScript, ESLint, and Vitest in both workspaces

@@ -1,0 +1,17 @@
+{
+  "name": "baju-kurung-ecommerce",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "backend",
+    "frontend",
+    "infra"
+  ],
+  "scripts": {
+    "test:frontend": "cd frontend && npx vitest run",
+    "test:backend": "cd backend && npx vitest run",
+    "build:frontend": "cd frontend && npm run build",
+    "deploy": "cd infra && npx cdk deploy --all"
+  }
+}
