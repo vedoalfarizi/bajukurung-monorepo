@@ -18,7 +18,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
     - _Requirements: 6.3_
   - [x] 2.2 Define S3 buckets for product images and frontend assets; configure CORS and bucket policies
     - _Requirements: 6.4, 0.3_
-  - [ ] 2.3 Define IAM roles with least-privilege policies for Product Lambda and Order Lambda
+  - [x] 2.3 Define IAM roles with least-privilege policies for Product Lambda and Order Lambda
     - _Requirements: 6.8_
   - [ ] 2.4 Configure CloudWatch log groups for both Lambda functions
     - _Requirements: 6.7_
