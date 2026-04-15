@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import { DatabaseStack } from "../stacks/database";
 import { StorageStack } from "../stacks/storage";
 import { IamStack } from "../stacks/iam";
+import { LoggingStack } from "../stacks/logging";
 
 const app = new cdk.App();
 
@@ -23,4 +24,9 @@ new IamStack(app, `BajuKurungIam-${envName}`, {
   stackName: `baju-kurung-iam-${envName}`,
   tableArn: databaseStack.table.tableArn,
   imagesBucketArn: storageStack.imagesBucket.bucketArn,
+});
+
+new LoggingStack(app, `BajuKurungLogging-${envName}`, {
+  env_name: envName,
+  stackName: `baju-kurung-logging-${envName}`,
 });

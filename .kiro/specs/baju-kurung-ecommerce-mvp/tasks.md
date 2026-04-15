@@ -20,7 +20,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
     - _Requirements: 6.4, 0.3_
   - [x] 2.3 Define IAM roles with least-privilege policies for Product Lambda and Order Lambda
     - _Requirements: 6.8_
-  - [ ] 2.4 Configure CloudWatch log groups for both Lambda functions
+  - [x] 2.4 Configure CloudWatch log groups for both Lambda functions
     - _Requirements: 6.7_
 
 - [ ] 3. AWS infrastructure — API Gateway, Cognito, CloudFront
