@@ -4,6 +4,7 @@ import { DatabaseStack } from "../stacks/database";
 import { StorageStack } from "../stacks/storage";
 import { IamStack } from "../stacks/iam";
 import { LoggingStack } from "../stacks/logging";
+import { AuthStack } from "../stacks/auth";
 
 const app = new cdk.App();
 
@@ -29,4 +30,9 @@ new IamStack(app, `BajuKurungIam-${envName}`, {
 new LoggingStack(app, `BajuKurungLogging-${envName}`, {
   env_name: envName,
   stackName: `baju-kurung-logging-${envName}`,
+});
+
+new AuthStack(app, `BajuKurungAuth-${envName}`, {
+  env_name: envName,
+  stackName: `baju-kurung-auth-${envName}`,
 });
