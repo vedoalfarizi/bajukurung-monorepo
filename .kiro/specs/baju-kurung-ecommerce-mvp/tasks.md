@@ -16,7 +16,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [x] 2.1 Define DynamoDB single table with GSI1 (occasion + preOrderWindowEnd), GSI2 (entityType + createdAt), GSI3 (status + createdAt)
     - Use AWS CDK or CloudFormation; parameterise table name as `baju-kurung-{env}`
     - _Requirements: 6.3_
-  - [ ] 2.2 Define S3 buckets for product images and frontend assets; configure CORS and bucket policies
+  - [x] 2.2 Define S3 buckets for product images and frontend assets; configure CORS and bucket policies
     - _Requirements: 6.4, 0.3_
   - [ ] 2.3 Define IAM roles with least-privilege policies for Product Lambda and Order Lambda
     - _Requirements: 6.8_
