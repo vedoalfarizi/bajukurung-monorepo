@@ -4,6 +4,11 @@ import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 
+// Note: CDK does not yet have an L2 construct for OAC — we use the L1 CfnOriginAccessControl.
+// The OAC ID is exported so cdn.ts can attach it to the CloudFront distribution origins.
+// Bucket policies use a CloudFront service principal scoped to this AWS account;
+// once cdn.ts is created, tighten the condition to the specific distribution ARN.
+
 export interface StorageStackProps extends cdk.StackProps {
   env_name: string;
 }
@@ -11,21 +16,26 @@ export interface StorageStackProps extends cdk.StackProps {
 export class StorageStack extends cdk.Stack {
   public readonly imagesBucket: s3.Bucket;
   public readonly frontendBucket: s3.Bucket;
-  public readonly cloudfrontOAI: cloudfront.OriginAccessIdentity;
+  public readonly oacId: string;
 
   constructor(scope: Construct, id: string, props: StorageStackProps) {
     super(scope, id, props);
 
     const isProd = props.env_name === "production";
 
-    // CloudFront Origin Access Identity — shared by both buckets
-    this.cloudfrontOAI = new cloudfront.OriginAccessIdentity(
-      this,
-      "CloudFrontOAI",
-      {
-        comment: `baju-kurung-${props.env_name} OAI`,
-      }
-    );
+    // ── Origin Access Control (OAC) ────────────────────────────────────────
+    // Replaces the legacy OAI. Attached to CloudFront origins in cdn.ts.
+    // Signing behaviour: always sign (SigV4); no override allowed.
+    const oac = new cloudfront.CfnOriginAccessControl(this, "OAC", {
+      originAccessControlConfig: {
+        name: `baju-kurung-oac-${props.env_name}`,
+        originAccessControlOriginType: "s3",
+        signingBehavior: "always",
+        signingProtocol: "sigv4",
+        description: `OAC for baju-kurung-${props.env_name}`,
+      },
+    });
+    this.oacId = oac.attrId;
 
     // ── Product Images Bucket ──────────────────────────────────────────────
     // Stores product photos and proof photos uploaded by the Seller.
@@ -52,7 +62,7 @@ export class StorageStack extends cdk.Stack {
           // Allow the frontend origin to PUT via pre-signed URLs (Seller uploads)
           allowedMethods: [s3.HttpMethods.PUT],
           allowedOrigins: [
-            "https://localhost:5173", // local dev
+            "http://localhost:5173", // local dev
             `https://baju-kurung-${props.env_name}.example.com`, // replace with real domain
           ],
           allowedHeaders: ["*"],
@@ -62,18 +72,21 @@ export class StorageStack extends cdk.Stack {
       ],
     });
 
-    // Grant CloudFront OAI read access to the images bucket
+    // Grant CloudFront service principal read access via OAC.
+    // Condition scoped to this AWS account; tighten to distribution ARN in cdn.ts
+    // by calling imagesBucket.addToResourcePolicy() with the distribution ARN condition.
     this.imagesBucket.addToResourcePolicy(
       new iam.PolicyStatement({
-        sid: "AllowCloudFrontOAIRead",
+        sid: "AllowCloudFrontOACRead",
         effect: iam.Effect.ALLOW,
-        principals: [
-          new iam.CanonicalUserPrincipal(
-            this.cloudfrontOAI.cloudFrontOriginAccessIdentityS3CanonicalUserId
-          ),
-        ],
+        principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
         actions: ["s3:GetObject"],
         resources: [`${this.imagesBucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: {
+            "AWS:SourceAccount": this.account,
+          },
+        },
       })
     );
 
@@ -92,18 +105,19 @@ export class StorageStack extends cdk.Stack {
       autoDeleteObjects: !isProd,
     });
 
-    // Grant CloudFront OAI read access to the frontend bucket
+    // Grant CloudFront service principal read access via OAC.
     this.frontendBucket.addToResourcePolicy(
       new iam.PolicyStatement({
-        sid: "AllowCloudFrontOAIRead",
+        sid: "AllowCloudFrontOACRead",
         effect: iam.Effect.ALLOW,
-        principals: [
-          new iam.CanonicalUserPrincipal(
-            this.cloudfrontOAI.cloudFrontOriginAccessIdentityS3CanonicalUserId
-          ),
-        ],
+        principals: [new iam.ServicePrincipal("cloudfront.amazonaws.com")],
         actions: ["s3:GetObject"],
         resources: [`${this.frontendBucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: {
+            "AWS:SourceAccount": this.account,
+          },
+        },
       })
     );
 
@@ -129,9 +143,10 @@ export class StorageStack extends cdk.Stack {
       exportName: `baju-kurung-frontend-bucket-arn-${props.env_name}`,
     });
 
-    new cdk.CfnOutput(this, "CloudFrontOAIId", {
-      value: this.cloudfrontOAI.originAccessIdentityId,
-      exportName: `baju-kurung-cloudfront-oai-id-${props.env_name}`,
+    new cdk.CfnOutput(this, "OACId", {
+      value: this.oacId,
+      exportName: `baju-kurung-oac-id-${props.env_name}`,
+      description: "OAC ID — attach to S3 origins in the CloudFront distribution (cdn.ts)",
     });
   }
 }
