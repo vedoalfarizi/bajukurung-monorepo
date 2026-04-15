@@ -5,6 +5,7 @@ import { StorageStack } from "../stacks/storage";
 import { IamStack } from "../stacks/iam";
 import { LoggingStack } from "../stacks/logging";
 import { AuthStack } from "../stacks/auth";
+import { ApiStack } from "../stacks/api";
 
 const app = new cdk.App();
 
@@ -20,7 +21,7 @@ const storageStack = new StorageStack(app, `BajuKurungStorage-${envName}`, {
   stackName: `baju-kurung-storage-${envName}`,
 });
 
-new IamStack(app, `BajuKurungIam-${envName}`, {
+const iamStack = new IamStack(app, `BajuKurungIam-${envName}`, {
   env_name: envName,
   stackName: `baju-kurung-iam-${envName}`,
   tableArn: databaseStack.table.tableArn,
@@ -32,7 +33,15 @@ new LoggingStack(app, `BajuKurungLogging-${envName}`, {
   stackName: `baju-kurung-logging-${envName}`,
 });
 
-new AuthStack(app, `BajuKurungAuth-${envName}`, {
+const authStack = new AuthStack(app, `BajuKurungAuth-${envName}`, {
   env_name: envName,
   stackName: `baju-kurung-auth-${envName}`,
+});
+
+new ApiStack(app, `BajuKurungApi-${envName}`, {
+  env_name: envName,
+  stackName: `baju-kurung-api-${envName}`,
+  userPool: authStack.userPool,
+  productLambdaRole: iamStack.productLambdaRole,
+  orderLambdaRole: iamStack.orderLambdaRole,
 });

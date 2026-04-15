@@ -26,7 +26,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
 - [ ] 3. AWS infrastructure — API Gateway, Cognito, CloudFront
   - [x] 3.1 Define Amazon Cognito User Pool for Seller authentication; configure hosted UI
     - _Requirements: 6.6_
-  - [ ] 3.2 Define REST API Gateway with Cognito Authorizer; wire public and protected routes
+  - [x] 3.2 Define REST API Gateway with Cognito Authorizer; wire public and protected routes
     - _Requirements: 6.2, 6.6_
   - [ ] 3.3 Define CloudFront distribution serving frontend S3 bucket and product images S3 bucket
     - _Requirements: 6.5_
