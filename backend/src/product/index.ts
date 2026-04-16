@@ -1,11 +1,90 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "crypto";
 import type { Occasion, StandardSize } from "@baju-kurung/shared";
 import { ddbClient, TABLE_NAME, errorResponse, successResponse } from "../shared/index";
 
 const VALID_OCCASIONS: Occasion[] = ["Raya", "Wedding", "Casual"];
 const VALID_SIZES: StandardSize[] = ["XS", "S", "M", "L", "XL", "XXL", "AllSize"];
+
+// ── GET /products ─────────────────────────────────────────────────────────────
+
+export async function listProducts(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const occasion = event.queryStringParameters?.occasion;
+  const size = event.queryStringParameters?.size;
+
+  // Validate optional occasion param
+  if (occasion !== undefined && !VALID_OCCASIONS.includes(occasion as Occasion)) {
+    return errorResponse(400, "VALIDATION_ERROR", `occasion must be one of: ${VALID_OCCASIONS.join(", ")}.`);
+  }
+
+  // Validate optional size param
+  if (size !== undefined && !VALID_SIZES.includes(size as StandardSize)) {
+    return errorResponse(400, "VALIDATION_ERROR", `size must be one of: ${VALID_SIZES.join(", ")}.`);
+  }
+
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  let items: Record<string, unknown>[] = [];
+
+  if (occasion) {
+    // Query GSI1: PK = occasion, SK = preOrderWindowEnd
+    // Use SK condition to pre-filter: preOrderWindowEnd >= today (window hasn't ended yet)
+    const result = await ddbClient.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: "GSI1",
+        KeyConditionExpression: "occasion = :occ AND preOrderWindowEnd >= :today",
+        ExpressionAttributeValues: {
+          ":occ": occasion,
+          ":today": today,
+        },
+      })
+    );
+    items = (result.Items ?? []) as Record<string, unknown>[];
+  } else {
+    // No occasion filter — scan all products
+    const result = await ddbClient.send(
+      new ScanCommand({
+        TableName: TABLE_NAME,
+        FilterExpression: "entityType = :et AND preOrderWindowEnd >= :today",
+        ExpressionAttributeValues: {
+          ":et": "PRODUCT",
+          ":today": today,
+        },
+      })
+    );
+    items = (result.Items ?? []) as Record<string, unknown>[];
+  }
+
+  // Filter server-side: preOrderWindowStart <= today (window has started)
+  let products = items.filter((item) => {
+    const start = item.preOrderWindowStart as string | undefined;
+    return start !== undefined && start <= today;
+  });
+
+  // Optional size filter
+  if (size) {
+    products = products.filter((item) => {
+      const availableSizes = item.availableSizes as string[] | undefined;
+      return Array.isArray(availableSizes) && availableSizes.includes(size);
+    });
+  }
+
+  // Shape the response — return only the fields needed for catalogue listing
+  const response = products.map((item) => ({
+    productId: item.productId,
+    name: item.name,
+    occasion: item.occasion,
+    availableSizes: item.availableSizes,
+    priceIDR: item.priceIDR,
+    primaryImageKey: item.primaryImageKey,
+    preOrderWindowStart: item.preOrderWindowStart,
+    preOrderWindowEnd: item.preOrderWindowEnd,
+  }));
+
+  return successResponse(200, response);
+}
 
 // ── POST /products ────────────────────────────────────────────────────────────
 
@@ -136,6 +215,11 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   const { httpMethod, path } = event;
 
   try {
+    // GET /products
+    if (httpMethod === "GET" && path === "/products") {
+      return await listProducts(event);
+    }
+
     // POST /products
     if (httpMethod === "POST" && path === "/products") {
       return await createProduct(event);

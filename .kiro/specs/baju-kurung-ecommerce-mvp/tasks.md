@@ -42,7 +42,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [ ]* 4.2 Write property test for product creation round-trip (Property 5b)
     - **Property 5b: Product creation round-trip preserves all fields**
     - **Validates: Requirements 0.2, 0.4**
-  - [ ] 4.3 Implement `GET /products` handler: query GSI1 by occasion, filter by open Pre-Order Window (start ≤ today ≤ end), support optional `?size=` filter
+  - [x] 4.3 Implement `GET /products` handler: query GSI1 by occasion, filter by open Pre-Order Window (start ≤ today ≤ end), support optional `?size=` filter
     - Return only products with open Pre-Order Window
     - _Requirements: 1.2, 1.3, 1.5, 0.6_
   - [ ]* 4.4 Write property test for catalogue occasion + window filter (Property 1)

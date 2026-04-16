@@ -18,6 +18,7 @@ vi.mock("../shared/index", () => ({
 }));
 
 import { handler } from "./index";
+import { ddbClient } from "../shared/index";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -212,5 +213,159 @@ describe("POST /products", () => {
     const event = makeEvent({ httpMethod: "DELETE", path: "/products" });
     const res = await handler(event);
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// ── GET /products tests ───────────────────────────────────────────────────────
+
+// Helper to build a product DDB item with configurable window dates
+function makeProductItem(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+  const today = new Date().toISOString().slice(0, 10);
+  // Default: window open (started yesterday, ends tomorrow)
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  return {
+    PK: "PRODUCT#test-id",
+    SK: "METADATA",
+    entityType: "PRODUCT",
+    productId: "test-id",
+    name: "Baju Kurung Moden Raya",
+    occasion: "Raya",
+    availableSizes: ["S", "M", "L"],
+    priceIDR: 450000,
+    primaryImageKey: "products/test-id/primary.jpg",
+    preOrderWindowStart: yesterday,
+    preOrderWindowEnd: tomorrow,
+    createdAt: today,
+    updatedAt: today,
+    ...overrides,
+  };
+}
+
+describe("GET /products", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(ddbClient.send).mockResolvedValue({} as never);
+  });
+
+  it("returns 200 with empty array when no products match", async () => {
+    vi.mocked(ddbClient.send).mockResolvedValue({ Items: [] } as never);
+    const event = makeEvent({ httpMethod: "GET", path: "/products", queryStringParameters: null });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual([]);
+  });
+
+  it("returns only products with open Pre-Order Window (start <= today <= end)", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const lastYear = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+
+    const openProduct = makeProductItem({ productId: "open", preOrderWindowStart: yesterday, preOrderWindowEnd: tomorrow });
+    // Window not yet started (starts tomorrow)
+    const futureProduct = makeProductItem({ productId: "future", preOrderWindowStart: tomorrow, preOrderWindowEnd: tomorrow });
+
+    // GSI1 query already filters preOrderWindowEnd >= today, so only openProduct is returned
+    vi.mocked(ddbClient.send).mockResolvedValue({ Items: [openProduct] } as never);
+
+    const event = makeEvent({ httpMethod: "GET", path: "/products", queryStringParameters: { occasion: "Raya" } });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{ productId: string }>;
+    expect(body.map((p) => p.productId)).toContain("open");
+    expect(body.map((p) => p.productId)).not.toContain("future");
+  });
+
+  it("filters out products whose window has not started yet (preOrderWindowStart > today)", async () => {
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const dayAfter = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+    // DDB returns this item (preOrderWindowEnd >= today), but start is in the future
+    const notStarted = makeProductItem({ productId: "not-started", preOrderWindowStart: tomorrow, preOrderWindowEnd: dayAfter });
+    vi.mocked(ddbClient.send).mockResolvedValue({ Items: [notStarted] } as never);
+
+    const event = makeEvent({ httpMethod: "GET", path: "/products", queryStringParameters: { occasion: "Raya" } });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{ productId: string }>;
+    expect(body).toHaveLength(0);
+  });
+
+  it("filters by occasion using GSI1 when ?occasion= is provided", async () => {
+    const rayaProduct = makeProductItem({ productId: "raya-1", occasion: "Raya" });
+    vi.mocked(ddbClient.send).mockResolvedValue({ Items: [rayaProduct] } as never);
+
+    const event = makeEvent({ httpMethod: "GET", path: "/products", queryStringParameters: { occasion: "Raya" } });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{ occasion: string }>;
+    expect(body.every((p) => p.occasion === "Raya")).toBe(true);
+  });
+
+  it("returns 400 VALIDATION_ERROR for invalid occasion param", async () => {
+    const event = makeEvent({ httpMethod: "GET", path: "/products", queryStringParameters: { occasion: "Birthday" } });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("filters by size when ?size= is provided", async () => {
+    const withM = makeProductItem({ productId: "has-m", availableSizes: ["S", "M", "L"] });
+    const withoutM = makeProductItem({ productId: "no-m", availableSizes: ["XL", "XXL"] });
+    vi.mocked(ddbClient.send).mockResolvedValue({ Items: [withM, withoutM] } as never);
+
+    const event = makeEvent({ httpMethod: "GET", path: "/products", queryStringParameters: { occasion: "Raya", size: "M" } });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{ productId: string; availableSizes: string[] }>;
+    expect(body.every((p) => p.availableSizes.includes("M"))).toBe(true);
+    expect(body.map((p) => p.productId)).not.toContain("no-m");
+  });
+
+  it("returns 400 VALIDATION_ERROR for invalid size param", async () => {
+    const event = makeEvent({ httpMethod: "GET", path: "/products", queryStringParameters: { size: "XXXL" } });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns empty array when size filter matches no products", async () => {
+    const noXXL = makeProductItem({ productId: "no-xxl", availableSizes: ["S", "M"] });
+    vi.mocked(ddbClient.send).mockResolvedValue({ Items: [noXXL] } as never);
+
+    const event = makeEvent({ httpMethod: "GET", path: "/products", queryStringParameters: { size: "XXL" } });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual([]);
+  });
+
+  it("response includes required catalogue fields for each product", async () => {
+    const product = makeProductItem();
+    vi.mocked(ddbClient.send).mockResolvedValue({ Items: [product] } as never);
+
+    const event = makeEvent({ httpMethod: "GET", path: "/products", queryStringParameters: null });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<Record<string, unknown>>;
+    expect(body).toHaveLength(1);
+    const p = body[0];
+    expect(p).toHaveProperty("productId");
+    expect(p).toHaveProperty("name");
+    expect(p).toHaveProperty("occasion");
+    expect(p).toHaveProperty("availableSizes");
+    expect(p).toHaveProperty("priceIDR");
+    expect(p).toHaveProperty("primaryImageKey");
+    expect(p).toHaveProperty("preOrderWindowStart");
+    expect(p).toHaveProperty("preOrderWindowEnd");
+  });
+
+  it("works without any query params (returns all open products via scan)", async () => {
+    const product = makeProductItem();
+    vi.mocked(ddbClient.send).mockResolvedValue({ Items: [product] } as never);
+
+    const event = makeEvent({ httpMethod: "GET", path: "/products", queryStringParameters: null });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toHaveLength(1);
   });
 });
