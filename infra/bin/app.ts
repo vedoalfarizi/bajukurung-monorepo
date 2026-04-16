@@ -6,6 +6,7 @@ import { IamStack } from "../stacks/iam";
 import { LoggingStack } from "../stacks/logging";
 import { AuthStack } from "../stacks/auth";
 import { ApiStack } from "../stacks/api";
+import { CdnStack } from "../stacks/cdn";
 
 const app = new cdk.App();
 
@@ -44,4 +45,11 @@ new ApiStack(app, `BajuKurungApi-${envName}`, {
   userPool: authStack.userPool,
   productLambdaRole: iamStack.productLambdaRole,
   orderLambdaRole: iamStack.orderLambdaRole,
+});
+
+new CdnStack(app, `BajuKurungCdn-${envName}`, {
+  env_name: envName,
+  stackName: `baju-kurung-cdn-${envName}`,
+  frontendBucket: storageStack.frontendBucket,
+  imagesBucket: storageStack.imagesBucket,
 });

@@ -28,7 +28,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
     - _Requirements: 6.6_
   - [x] 3.2 Define REST API Gateway with Cognito Authorizer; wire public and protected routes
     - _Requirements: 6.2, 6.6_
-  - [ ] 3.3 Define CloudFront distribution serving frontend S3 bucket and product images S3 bucket
+  - [-] 3.3 Define CloudFront distribution serving frontend S3 bucket and product images S3 bucket
     - _Requirements: 6.5_
   - [ ] 3.4 Add staging and production stack namespaces (separate environments)
     - _Requirements: 6.9_
