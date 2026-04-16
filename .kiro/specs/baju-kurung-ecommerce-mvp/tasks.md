@@ -73,7 +73,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - Ensure all Product Service tests pass, ask the user if questions arise.
 
 - [ ] 6. Order Service Lambda — order creation and retrieval
-  - [ ] 6.1 Implement `POST /orders` handler (public, no auth): validate customerName, customerWhatsApp, and non-empty lineItems; write Order item to DynamoDB with status `PENDING`; return `orderId`
+  - [x] 6.1 Implement `POST /orders` handler (public, no auth): validate customerName, customerWhatsApp, and non-empty lineItems; write Order item to DynamoDB with status `PENDING`; return `orderId`
     - _Requirements: 3.4, 4.5, 4.9, 4.10_
   - [ ]* 6.2 Write property test for checkout order round-trip (Property 8)
     - **Property 8: Checkout creates an order that preserves cart contents**
