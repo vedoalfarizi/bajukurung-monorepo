@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { PutCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "crypto";
 import type { Occasion, StandardSize } from "@baju-kurung/shared";
 import { ddbClient, TABLE_NAME, errorResponse, successResponse } from "../shared/index";
@@ -209,6 +209,46 @@ async function createProduct(event: APIGatewayProxyEvent): Promise<APIGatewayPro
   return successResponse(201, { productId });
 }
 
+// ── GET /products/{productId} ─────────────────────────────────────────────────
+
+async function getProduct(productId: string): Promise<APIGatewayProxyResult> {
+  const result = await ddbClient.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        PK: `PRODUCT#${productId}`,
+        SK: "METADATA",
+      },
+    })
+  );
+
+  if (!result.Item) {
+    return errorResponse(404, "PRODUCT_NOT_FOUND", "The requested product does not exist.");
+  }
+
+  const item = result.Item as Record<string, unknown>;
+
+  const product = {
+    productId: item.productId,
+    name: item.name,
+    occasion: item.occasion,
+    description: item.description,
+    fabricType: item.fabricType,
+    colours: item.colours,
+    availableSizes: item.availableSizes,
+    sizeChart: item.sizeChart,
+    priceIDR: item.priceIDR,
+    primaryImageKey: item.primaryImageKey,
+    imageKeys: item.imageKeys,
+    preOrderWindowStart: item.preOrderWindowStart,
+    preOrderWindowEnd: item.preOrderWindowEnd,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+
+  return successResponse(200, product);
+}
+
 // ── Lambda handler (router) ───────────────────────────────────────────────────
 
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -218,6 +258,11 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // GET /products
     if (httpMethod === "GET" && path === "/products") {
       return await listProducts(event);
+    }
+
+    // GET /products/{productId}
+    if (httpMethod === "GET" && event.pathParameters?.productId) {
+      return await getProduct(event.pathParameters.productId);
     }
 
     // POST /products

@@ -54,7 +54,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [ ]* 4.6 Write property test for size filter correctness (Property 3)
     - **Property 3: Size filter returns only matching products**
     - **Validates: Requirements 1.5**
-  - [ ] 4.7 Implement `GET /products/{productId}` handler: fetch product by PK, return full detail including sizeChart
+  - [x] 4.7 Implement `GET /products/{productId}` handler: fetch product by PK, return full detail including sizeChart
     - Return `404 PRODUCT_NOT_FOUND` if not found
     - _Requirements: 1.6, 2.2, 2.3_
   - [ ]* 4.8 Write property test for product detail field completeness (Property 4)

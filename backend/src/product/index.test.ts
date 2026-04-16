@@ -369,3 +369,114 @@ describe("GET /products", () => {
     expect(JSON.parse(res.body)).toHaveLength(1);
   });
 });
+
+// ── GET /products/{productId} tests ──────────────────────────────────────────
+
+function makeDetailProductItem(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  return {
+    PK: "PRODUCT#detail-id",
+    SK: "METADATA",
+    entityType: "PRODUCT",
+    productId: "detail-id",
+    name: "Baju Kurung Moden Raya",
+    occasion: "Raya",
+    description: "A beautiful Raya outfit",
+    fabricType: "Cotton Silk",
+    colours: ["Dusty Rose", "Sage Green"],
+    availableSizes: ["S", "M", "L"],
+    sizeChart: {
+      S: { bust: "81–85", waist: "65–69", hip: "89–93" },
+      M: { bust: "86–90", waist: "70–74", hip: "94–98" },
+      L: { bust: "91–96", waist: "75–80", hip: "99–104" },
+    },
+    priceIDR: 450000,
+    primaryImageKey: "products/detail-id/primary.jpg",
+    imageKeys: ["products/detail-id/1.jpg", "products/detail-id/2.jpg"],
+    preOrderWindowStart: yesterday,
+    preOrderWindowEnd: tomorrow,
+    createdAt: today,
+    updatedAt: today,
+    ...overrides,
+  };
+}
+
+describe("GET /products/{productId}", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 200 with full product detail when product exists", async () => {
+    const item = makeDetailProductItem();
+    vi.mocked(ddbClient.send).mockResolvedValue({ Item: item } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/products/detail-id",
+      pathParameters: { productId: "detail-id" },
+    });
+    const res = await handler(event);
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Record<string, unknown>;
+
+    // All required detail fields must be present
+    expect(body).toHaveProperty("productId", "detail-id");
+    expect(body).toHaveProperty("name", "Baju Kurung Moden Raya");
+    expect(body).toHaveProperty("occasion", "Raya");
+    expect(body).toHaveProperty("description", "A beautiful Raya outfit");
+    expect(body).toHaveProperty("fabricType", "Cotton Silk");
+    expect(body).toHaveProperty("colours");
+    expect(body).toHaveProperty("availableSizes");
+    expect(body).toHaveProperty("sizeChart");
+    expect(body).toHaveProperty("priceIDR", 450000);
+    expect(body).toHaveProperty("primaryImageKey");
+    expect(body).toHaveProperty("imageKeys");
+    expect(body).toHaveProperty("preOrderWindowStart");
+    expect(body).toHaveProperty("preOrderWindowEnd");
+    expect(body).toHaveProperty("createdAt");
+    expect(body).toHaveProperty("updatedAt");
+  });
+
+  it("returns sizeChart with entries for all available sizes", async () => {
+    const item = makeDetailProductItem();
+    vi.mocked(ddbClient.send).mockResolvedValue({ Item: item } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/products/detail-id",
+      pathParameters: { productId: "detail-id" },
+    });
+    const res = await handler(event);
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Record<string, unknown>;
+    const sizeChart = body.sizeChart as Record<string, { bust: string; waist: string; hip: string }>;
+    const availableSizes = body.availableSizes as string[];
+
+    for (const size of availableSizes) {
+      expect(sizeChart).toHaveProperty(size);
+      expect(sizeChart[size].bust).toBeTruthy();
+      expect(sizeChart[size].waist).toBeTruthy();
+      expect(sizeChart[size].hip).toBeTruthy();
+    }
+  });
+
+  it("returns 404 PRODUCT_NOT_FOUND when product does not exist", async () => {
+    vi.mocked(ddbClient.send).mockResolvedValue({ Item: undefined } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/products/nonexistent-id",
+      pathParameters: { productId: "nonexistent-id" },
+    });
+    const res = await handler(event);
+
+    expect(res.statusCode).toBe(404);
+    const body = JSON.parse(res.body);
+    expect(body.error.code).toBe("PRODUCT_NOT_FOUND");
+    expect(body.error.message).toBe("The requested product does not exist.");
+  });
+});
