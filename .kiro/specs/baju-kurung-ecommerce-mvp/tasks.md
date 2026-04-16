@@ -34,7 +34,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
     - _Requirements: 6.9_
 
 - [ ] 4. Product Service Lambda — core CRUD
-  - [ ] 4.1 Implement `POST /products` handler: validate required fields, write Product item to DynamoDB, return `productId`
+  - [x] 4.1 Implement `POST /products` handler: validate required fields, write Product item to DynamoDB, return `productId`
     - Validate: name, occasion, description, fabricType, colours, availableSizes, sizeChart (bust/waist/hip per size), priceIDR, imageKeys, preOrderWindowStart, preOrderWindowEnd
     - Return `400 VALIDATION_ERROR` for missing fields; `400 INCOMPLETE_SIZE_CHART` if sizeChart missing entry for any availableSize
     - Require Cognito JWT (enforced by API Gateway Authorizer)
