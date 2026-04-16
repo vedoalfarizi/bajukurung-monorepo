@@ -8,6 +8,13 @@ export interface CdnStackProps extends cdk.StackProps {
   env_name: string;
   frontendBucket: s3.Bucket;
   imagesBucket: s3.Bucket;
+  /**
+   * OAC ID from StorageStack — attached to S3 origins via L1 override.
+   * Using withBucketDefaults + manual L1 override avoids a cross-stack
+   * dependency cycle that occurs when withOriginAccessControl() is used
+   * with buckets defined in a separate stack.
+   */
+  oacId: string;
 }
 
 export class CdnStack extends cdk.Stack {
@@ -52,18 +59,12 @@ export class CdnStack extends cdk.Stack {
     });
 
     // ── S3 Origins ─────────────────────────────────────────────────────────
-    // originAccessLevels: [] disables CDK's automatic bucket policy injection,
-    // preventing a cross-stack dependency cycle. Bucket policies granting
-    // CloudFront OAC read access are already defined in storage.ts.
-    const frontendOrigin = origins.S3BucketOrigin.withOriginAccessControl(
-      props.frontendBucket,
-      { originAccessLevels: [] },
-    );
-
-    const imagesOrigin = origins.S3BucketOrigin.withOriginAccessControl(
-      props.imagesBucket,
-      { originAccessLevels: [] },
-    );
+    // withBucketDefaults() is used instead of withOriginAccessControl() to
+    // avoid a cross-stack dependency cycle. The OAC is attached manually via
+    // L1 addPropertyOverride() below after the distribution is created.
+    // Bucket policies granting CloudFront OAC read access are in storage.ts.
+    const frontendOrigin = origins.S3BucketOrigin.withBucketDefaults(props.frontendBucket);
+    const imagesOrigin = origins.S3BucketOrigin.withBucketDefaults(props.imagesBucket);
 
     // ── CloudFront Distribution ────────────────────────────────────────────
     // Default origin: frontend S3 bucket (SPA)
@@ -127,6 +128,21 @@ export class CdnStack extends cdk.Stack {
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
     });
+
+    // ── Attach OAC via L1 escape hatch ─────────────────────────────────────
+    // withBucketDefaults() does not wire OAC, so we attach it manually.
+    // The distribution origins are ordered: default (frontend) first, then
+    // additional behaviors in declaration order (*.js, *.css, images/*).
+    // CDK merges origins by domain — frontend bucket = index 0, images bucket = index 1.
+    const cfnDist = this.distribution.node.defaultChild as cloudfront.CfnDistribution;
+    cfnDist.addPropertyOverride(
+      "DistributionConfig.Origins.0.OriginAccessControlId",
+      props.oacId,
+    );
+    cfnDist.addPropertyOverride(
+      "DistributionConfig.Origins.1.OriginAccessControlId",
+      props.oacId,
+    );
 
     // ── Outputs ────────────────────────────────────────────────────────────
 

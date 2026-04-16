@@ -52,4 +52,5 @@ new CdnStack(app, `BajuKurungCdn-${envName}`, {
   stackName: `baju-kurung-cdn-${envName}`,
   frontendBucket: storageStack.frontendBucket,
   imagesBucket: storageStack.imagesBucket,
+  oacId: storageStack.oacId,
 });
