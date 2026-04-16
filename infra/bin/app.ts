@@ -10,7 +10,17 @@ import { CdnStack } from "../stacks/cdn";
 
 const app = new cdk.App();
 
-const envName: string = app.node.tryGetContext("env") ?? "staging";
+const VALID_ENVS = ["staging", "production"] as const;
+type EnvName = (typeof VALID_ENVS)[number];
+
+const rawEnv: string = app.node.tryGetContext("env") ?? "staging";
+if (!(VALID_ENVS as readonly string[]).includes(rawEnv)) {
+  throw new Error(
+    `Invalid env context value: "${rawEnv}". Must be one of: ${VALID_ENVS.join(", ")}.\n` +
+    `Usage: cdk deploy --all --context env=staging`
+  );
+}
+const envName = rawEnv as EnvName;
 
 const databaseStack = new DatabaseStack(app, `BajuKurungDatabase-${envName}`, {
   env_name: envName,
