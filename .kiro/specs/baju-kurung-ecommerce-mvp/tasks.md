@@ -78,7 +78,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [ ]* 6.2 Write property test for checkout order round-trip (Property 8)
     - **Property 8: Checkout creates an order that preserves cart contents**
     - **Validates: Requirements 3.4, 4.5, 4.9, 4.10**
-  - [ ] 6.3 Implement `GET /orders` handler (Seller JWT): query GSI2 for all orders sorted by createdAt; support optional `?status=` filter via GSI3
+  - [x] 6.3 Implement `GET /orders` handler (Seller JWT): query GSI2 for all orders sorted by createdAt; support optional `?status=` filter via GSI3
     - _Requirements: 5.2, 5.3_
   - [ ]* 6.4 Write property test for order list field completeness (Property 13)
     - **Property 13: Order list response contains all required fields for every order**

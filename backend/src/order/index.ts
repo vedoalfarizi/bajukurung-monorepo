@@ -1,10 +1,67 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "crypto";
-import type { LineItem, StandardSize } from "@baju-kurung/shared";
+import type { LineItem, OrderStatus, StandardSize } from "@baju-kurung/shared";
 import { ddbClient, TABLE_NAME, errorResponse, successResponse } from "../shared/index";
 
+const VALID_ORDER_STATUSES: OrderStatus[] = [
+  "PENDING",
+  "PAYMENT_PENDING",
+  "PACKAGED",
+  "READY_TO_SHIP",
+  "SHIPPED",
+  "DELIVERED",
+  "CANCELLED",
+  "REFUND",
+];
+
 const VALID_SIZES: StandardSize[] = ["XS", "S", "M", "L", "XL", "XXL", "AllSize"];
+
+// ── GET /orders ───────────────────────────────────────────────────────────────
+
+async function listOrders(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const statusFilter = event.queryStringParameters?.status;
+
+  // Validate status filter if provided
+  if (statusFilter !== undefined && !VALID_ORDER_STATUSES.includes(statusFilter as OrderStatus)) {
+    return errorResponse(
+      400,
+      "VALIDATION_ERROR",
+      `Invalid status value. Must be one of: ${VALID_ORDER_STATUSES.join(", ")}.`
+    );
+  }
+
+  let orders: Record<string, unknown>[];
+
+  if (statusFilter) {
+    // Use GSI3 (status + createdAt) to filter by status
+    const result = await ddbClient.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: "GSI3",
+        KeyConditionExpression: "#status = :status",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: { ":status": statusFilter },
+        ScanIndexForward: true, // ascending by createdAt
+      })
+    );
+    orders = (result.Items ?? []) as Record<string, unknown>[];
+  } else {
+    // Use GSI2 (entityType + createdAt) to list all orders sorted by createdAt
+    const result = await ddbClient.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: "GSI2",
+        KeyConditionExpression: "entityType = :entityType",
+        ExpressionAttributeValues: { ":entityType": "ORDER" },
+        ScanIndexForward: true, // ascending by createdAt
+      })
+    );
+    orders = (result.Items ?? []) as Record<string, unknown>[];
+  }
+
+  return successResponse(200, { orders });
+}
 
 // ── POST /orders ──────────────────────────────────────────────────────────────
 
@@ -104,6 +161,11 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   const { httpMethod, path } = event;
 
   try {
+    // GET /orders
+    if (httpMethod === "GET" && path === "/orders") {
+      return await listOrders(event);
+    }
+
     // POST /orders
     if (httpMethod === "POST" && path === "/orders") {
       return await createOrder(event);

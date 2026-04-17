@@ -250,8 +250,122 @@ describe("POST /orders", () => {
   });
 
   it("returns 404 for unknown routes", async () => {
-    const event = makeEvent({ httpMethod: "GET", path: "/orders" });
+    const event = makeEvent({ httpMethod: "DELETE", path: "/orders" });
     const res = await handler(event);
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// ── GET /orders tests ─────────────────────────────────────────────────────────
+
+describe("GET /orders", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 200 with orders array using GSI2 when no status filter", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const mockOrders = [
+      { orderId: "order-1", status: "PENDING", entityType: "ORDER", createdAt: "2025-01-01T00:00:00Z" },
+      { orderId: "order-2", status: "SHIPPED", entityType: "ORDER", createdAt: "2025-01-02T00:00:00Z" },
+    ];
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Items: mockOrders } as never);
+
+    const event = makeEvent({ httpMethod: "GET", path: "/orders", queryStringParameters: null });
+    const res = await handler(event);
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(Array.isArray(body.orders)).toBe(true);
+    expect(body.orders).toHaveLength(2);
+  });
+
+  it("queries GSI2 with entityType=ORDER when no status filter", async () => {
+    const { ddbClient } = await import("../shared/index");
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Items: [] } as never);
+
+    const event = makeEvent({ httpMethod: "GET", path: "/orders", queryStringParameters: null });
+    await handler(event);
+
+    const queryCall = vi.mocked(ddbClient.send).mock.calls[0][0] as {
+      input: { IndexName: string; ExpressionAttributeValues: Record<string, unknown> };
+    };
+    expect(queryCall.input.IndexName).toBe("GSI2");
+    expect(queryCall.input.ExpressionAttributeValues[":entityType"]).toBe("ORDER");
+  });
+
+  it("returns 200 with filtered orders using GSI3 when status filter provided", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const mockOrders = [
+      { orderId: "order-1", status: "PENDING", entityType: "ORDER", createdAt: "2025-01-01T00:00:00Z" },
+    ];
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Items: mockOrders } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/orders",
+      queryStringParameters: { status: "PENDING" },
+    });
+    const res = await handler(event);
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.orders).toHaveLength(1);
+    expect(body.orders[0].status).toBe("PENDING");
+  });
+
+  it("queries GSI3 with the provided status when status filter is given", async () => {
+    const { ddbClient } = await import("../shared/index");
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Items: [] } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/orders",
+      queryStringParameters: { status: "SHIPPED" },
+    });
+    await handler(event);
+
+    const queryCall = vi.mocked(ddbClient.send).mock.calls[0][0] as {
+      input: { IndexName: string; ExpressionAttributeValues: Record<string, unknown> };
+    };
+    expect(queryCall.input.IndexName).toBe("GSI3");
+    expect(queryCall.input.ExpressionAttributeValues[":status"]).toBe("SHIPPED");
+  });
+
+  it("returns 400 VALIDATION_ERROR for invalid status filter", async () => {
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/orders",
+      queryStringParameters: { status: "INVALID_STATUS" },
+    });
+    const res = await handler(event);
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns empty orders array when no orders exist", async () => {
+    const { ddbClient } = await import("../shared/index");
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Items: [] } as never);
+
+    const event = makeEvent({ httpMethod: "GET", path: "/orders", queryStringParameters: null });
+    const res = await handler(event);
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).orders).toEqual([]);
+  });
+
+  it("accepts all valid OrderStatus values as filter", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const statuses = ["PENDING", "PAYMENT_PENDING", "PACKAGED", "READY_TO_SHIP", "SHIPPED", "DELIVERED", "CANCELLED", "REFUND"];
+
+    for (const status of statuses) {
+      vi.mocked(ddbClient.send).mockResolvedValueOnce({ Items: [] } as never);
+      const event = makeEvent({
+        httpMethod: "GET",
+        path: "/orders",
+        queryStringParameters: { status },
+      });
+      const res = await handler(event);
+      expect(res.statusCode).toBe(200);
+    }
   });
 });
