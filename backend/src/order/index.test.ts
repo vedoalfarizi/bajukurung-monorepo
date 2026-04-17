@@ -17,7 +17,15 @@ vi.mock("../shared/index", () => ({
   }),
 }));
 
-import { handler } from "./index";
+// ── Mock S3 presigner so tests don't hit AWS ──────────────────────────────────
+vi.mock("@aws-sdk/s3-request-presigner", () => ({
+  getSignedUrl: vi.fn().mockResolvedValue("https://s3.amazonaws.com/mock-presigned-url"),
+}));
+
+vi.mock("@aws-sdk/client-s3", () => ({
+  S3Client: vi.fn().mockImplementation(() => ({})),
+  PutObjectCommand: vi.fn().mockImplementation((input) => ({ input })),
+}));import { handler } from "./index";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -858,5 +866,108 @@ describe("PATCH /orders/{orderId}", () => {
       input: { ExpressionAttributeValues: Record<string, unknown> };
     };
     expect(updateCall.input.ExpressionAttributeValues[":totalPriceIDR"]).toBe(3 * 200000);
+  });
+});
+
+// ── POST /orders/{orderId}/uploads tests ─────────────────────────────────────
+
+describe("POST /orders/{orderId}/uploads", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function makeUploadEvent(orderId: string | null, body: unknown): APIGatewayProxyEvent {
+    return makeEvent({
+      httpMethod: "POST",
+      path: orderId ? `/orders/${orderId}/uploads` : "/orders//uploads",
+      pathParameters: orderId ? { orderId } : null,
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("returns 200 with uploadUrl and key for proofOfPayment", async () => {
+    const event = makeUploadEvent("order-abc", { fileType: "proofOfPayment" });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(typeof body.uploadUrl).toBe("string");
+    expect(body.uploadUrl.length).toBeGreaterThan(0);
+    expect(typeof body.key).toBe("string");
+  });
+
+  it("returns 200 with uploadUrl and key for proofOfReceipt", async () => {
+    const event = makeUploadEvent("order-abc", { fileType: "proofOfReceipt" });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.key).toMatch(/^orders\/order-abc\/proofOfReceipt\/.+\.jpg$/);
+  });
+
+  it("returns 200 with uploadUrl and key for proofOfRefund", async () => {
+    const event = makeUploadEvent("order-abc", { fileType: "proofOfRefund" });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.key).toMatch(/^orders\/order-abc\/proofOfRefund\/.+\.jpg$/);
+  });
+
+  it("key follows pattern orders/{orderId}/{fileType}/{uuid}.jpg", async () => {
+    const event = makeUploadEvent("order-xyz", { fileType: "proofOfPayment" });
+    const res = await handler(event);
+    const { key } = JSON.parse(res.body);
+    expect(key).toMatch(/^orders\/order-xyz\/proofOfPayment\/[0-9a-f-]{36}\.jpg$/);
+  });
+
+  it("uses .png extension when contentType is image/png", async () => {
+    const event = makeUploadEvent("order-abc", { fileType: "proofOfPayment", contentType: "image/png" });
+    const res = await handler(event);
+    const { key } = JSON.parse(res.body);
+    expect(key).toMatch(/\.png$/);
+  });
+
+  it("defaults to .jpg extension when contentType is image/jpeg", async () => {
+    const event = makeUploadEvent("order-abc", { fileType: "proofOfPayment", contentType: "image/jpeg" });
+    const res = await handler(event);
+    const { key } = JSON.parse(res.body);
+    expect(key).toMatch(/\.jpg$/);
+  });
+
+  it("defaults to .jpg extension when contentType is omitted", async () => {
+    const event = makeUploadEvent("order-abc", { fileType: "proofOfPayment" });
+    const res = await handler(event);
+    const { key } = JSON.parse(res.body);
+    expect(key).toMatch(/\.jpg$/);
+  });
+
+  it("returns 400 VALIDATION_ERROR when fileType is missing", async () => {
+    const event = makeUploadEvent("order-abc", {});
+    const res = await handler(event);
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns 400 VALIDATION_ERROR when fileType is invalid", async () => {
+    const event = makeUploadEvent("order-abc", { fileType: "proofOfSomethingElse" });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns 400 VALIDATION_ERROR for invalid JSON body", async () => {
+    const event = makeEvent({
+      httpMethod: "POST",
+      path: "/orders/order-abc/uploads",
+      pathParameters: { orderId: "order-abc" },
+      body: "not-json",
+    });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("generates a unique key on each call", async () => {
+    const event1 = makeUploadEvent("order-abc", { fileType: "proofOfPayment" });
+    const event2 = makeUploadEvent("order-abc", { fileType: "proofOfPayment" });
+    const res1 = await handler(event1);
+    const res2 = await handler(event2);
+    expect(JSON.parse(res1.body).key).not.toBe(JSON.parse(res2.body).key);
   });
 });

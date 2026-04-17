@@ -1,9 +1,17 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 import type { LineItem, OrderStatus, StandardSize } from "@baju-kurung/shared";
 import { ddbClient, TABLE_NAME, errorResponse, successResponse } from "../shared/index";
 import { validateTransition } from "./stateMachine";
+
+const s3Client = new S3Client({});
+const IMAGES_BUCKET_NAME = process.env.IMAGES_BUCKET_NAME ?? "baju-kurung-images-local";
+
+const VALID_FILE_TYPES = ["proofOfPayment", "proofOfReceipt", "proofOfRefund"] as const;
+type FileType = (typeof VALID_FILE_TYPES)[number];
 
 const VALID_ORDER_STATUSES: OrderStatus[] = [
   "PENDING",
@@ -376,6 +384,50 @@ async function updateOrderStatus(event: APIGatewayProxyEvent): Promise<APIGatewa
   return successResponse(200, { order: updatedOrder, copyableMessage });
 }
 
+// ── POST /orders/{orderId}/uploads ───────────────────────────────────────────
+
+async function generateUploadUrl(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const orderId = event.pathParameters?.orderId;
+
+  if (!orderId || orderId.trim() === "") {
+    return errorResponse(400, "VALIDATION_ERROR", "orderId path parameter is required.");
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(event.body ?? "{}");
+  } catch {
+    return errorResponse(400, "VALIDATION_ERROR", "Request body must be valid JSON.");
+  }
+
+  const { fileType, contentType } = body;
+
+  if (!fileType || !VALID_FILE_TYPES.includes(fileType as FileType)) {
+    return errorResponse(
+      400,
+      "VALIDATION_ERROR",
+      `fileType is required and must be one of: ${VALID_FILE_TYPES.join(", ")}.`
+    );
+  }
+
+  const resolvedContentType = typeof contentType === "string" && contentType.trim() !== ""
+    ? contentType.trim()
+    : "image/jpeg";
+
+  const ext = resolvedContentType === "image/png" ? "png" : "jpg";
+  const key = `orders/${orderId}/${fileType}/${randomUUID()}.${ext}`;
+
+  const command = new PutObjectCommand({
+    Bucket: IMAGES_BUCKET_NAME,
+    Key: key,
+    ContentType: resolvedContentType,
+  });
+
+  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 }); // 15 minutes
+
+  return successResponse(200, { uploadUrl, key });
+}
+
 // ── Lambda handler (router) ───────────────────────────────────────────────────
 
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -395,6 +447,11 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // PATCH /orders/{orderId}
     if (httpMethod === "PATCH" && event.pathParameters?.orderId) {
       return await updateOrderStatus(event);
+    }
+
+    // POST /orders/{orderId}/uploads
+    if (httpMethod === "POST" && event.pathParameters?.orderId && path.endsWith("/uploads")) {
+      return await generateUploadUrl(event);
     }
 
     // POST /orders

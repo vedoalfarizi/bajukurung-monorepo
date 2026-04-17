@@ -114,7 +114,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [ ]* 7.6 Write property test for status history timestamp (Property 10)
     - **Property 10: Every status update produces a timestamped history record**
     - **Validates: Requirements 3.6, 5.9**
-  - [ ] 7.7 Implement `POST /orders/{orderId}/uploads` handler (Seller JWT): generate and return a pre-signed S3 URL for proof photo upload
+  - [x] 7.7 Implement `POST /orders/{orderId}/uploads` handler (Seller JWT): generate and return a pre-signed S3 URL for proof photo upload
     - _Requirements: 5.5, 5.7, 5.8_
 
 - [ ] 8. Checkpoint — Order Service
