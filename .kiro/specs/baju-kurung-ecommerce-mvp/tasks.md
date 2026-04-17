@@ -121,7 +121,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - Ensure all Order Service tests pass, ask the user if questions arise.
 
 - [ ] 9. WhatsApp message generators (frontend utilities)
-  - [ ] 9.1 Implement `generateOrderIntentLink(cart, customerName, orderId, sellerPhone): string`
+  - [x] 9.1 Implement `generateOrderIntentLink(cart, customerName, orderId, sellerPhone): string`
     - Returns `https://wa.me/{sellerPhone}?text={urlEncodedMessage}` with Bahasa Indonesia message body
     - _Requirements: 4.5, 4.6_
   - [ ]* 9.2 Write property test for customer order intent message (Property 12)
