@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "crypto";
 import type { LineItem, OrderStatus, StandardSize } from "@baju-kurung/shared";
 import { ddbClient, TABLE_NAME, errorResponse, successResponse } from "../shared/index";
@@ -61,6 +61,29 @@ async function listOrders(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
   }
 
   return successResponse(200, { orders });
+}
+
+// ── GET /orders/{orderId} ─────────────────────────────────────────────────────
+
+async function getOrder(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const orderId = event.pathParameters?.orderId;
+
+  if (!orderId || orderId.trim() === "") {
+    return errorResponse(400, "VALIDATION_ERROR", "orderId path parameter is required.");
+  }
+
+  const result = await ddbClient.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `ORDER#${orderId}`, SK: "METADATA" },
+    })
+  );
+
+  if (!result.Item) {
+    return errorResponse(404, "ORDER_NOT_FOUND", `Order with id '${orderId}' was not found.`);
+  }
+
+  return successResponse(200, { order: result.Item });
 }
 
 // ── POST /orders ──────────────────────────────────────────────────────────────
@@ -164,6 +187,11 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // GET /orders
     if (httpMethod === "GET" && path === "/orders") {
       return await listOrders(event);
+    }
+
+    // GET /orders/{orderId}
+    if (httpMethod === "GET" && event.pathParameters?.orderId) {
+      return await getOrder(event);
     }
 
     // POST /orders

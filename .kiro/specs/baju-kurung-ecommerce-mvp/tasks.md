@@ -86,7 +86,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [ ]* 6.5 Write property test for order status filter (Property 14)
     - **Property 14: Order status filter returns only matching orders**
     - **Validates: Requirements 5.3**
-  - [ ] 6.6 Implement `GET /orders/{orderId}` handler (Seller JWT): fetch order by PK, return full detail
+  - [x] 6.6 Implement `GET /orders/{orderId}` handler (Seller JWT): fetch order by PK, return full detail
     - _Requirements: 5.11_
   - [ ]* 6.7 Write property test for order detail field completeness (Property 15)
     - **Property 15: Order detail response contains all required fields**

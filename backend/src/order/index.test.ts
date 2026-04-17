@@ -369,3 +369,133 @@ describe("GET /orders", () => {
     }
   });
 });
+
+// ── GET /orders/{orderId} tests ───────────────────────────────────────────────
+
+describe("GET /orders/{orderId}", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const mockOrder = {
+    PK: "ORDER#order-abc",
+    SK: "METADATA",
+    entityType: "ORDER",
+    orderId: "order-abc",
+    customerName: "Siti Rahayu",
+    customerWhatsApp: "+628123456789",
+    lineItems: [{ productId: "prod-1", productName: "Baju Kurung Moden Raya", size: "M", quantity: 1, unitPriceIDR: 450000 }],
+    totalPriceIDR: 450000,
+    status: "PENDING",
+    trackingLink: null,
+    proofOfPaymentKey: null,
+    proofOfReceiptKey: null,
+    refundAmountIDR: null,
+    proofOfRefundKey: null,
+    createdAt: "2025-02-15T10:30:00Z",
+    updatedAt: "2025-02-15T10:30:00Z",
+  };
+
+  it("returns 200 with full order detail when order exists", async () => {
+    const { ddbClient } = await import("../shared/index");
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Item: mockOrder } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/orders/order-abc",
+      pathParameters: { orderId: "order-abc" },
+    });
+    const res = await handler(event);
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.order.orderId).toBe("order-abc");
+  });
+
+  it("returns all required order fields in the response", async () => {
+    const { ddbClient } = await import("../shared/index");
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Item: mockOrder } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/orders/order-abc",
+      pathParameters: { orderId: "order-abc" },
+    });
+    const res = await handler(event);
+    const { order } = JSON.parse(res.body);
+
+    expect(order.orderId).toBe("order-abc");
+    expect(order.status).toBe("PENDING");
+    expect(order.customerName).toBe("Siti Rahayu");
+    expect(order.customerWhatsApp).toBe("+628123456789");
+    expect(Array.isArray(order.lineItems)).toBe(true);
+    expect(order.lineItems).toHaveLength(1);
+    expect(order.totalPriceIDR).toBe(450000);
+    expect(order.createdAt).toBe("2025-02-15T10:30:00Z");
+    expect(order.trackingLink).toBeNull();
+  });
+
+  it("fetches by PK ORDER#<orderId> and SK METADATA", async () => {
+    const { ddbClient } = await import("../shared/index");
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Item: mockOrder } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/orders/order-abc",
+      pathParameters: { orderId: "order-abc" },
+    });
+    await handler(event);
+
+    const getCall = vi.mocked(ddbClient.send).mock.calls[0][0] as {
+      input: { Key: Record<string, string> };
+    };
+    expect(getCall.input.Key.PK).toBe("ORDER#order-abc");
+    expect(getCall.input.Key.SK).toBe("METADATA");
+  });
+
+  it("returns 404 ORDER_NOT_FOUND when order does not exist", async () => {
+    const { ddbClient } = await import("../shared/index");
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Item: undefined } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/orders/nonexistent",
+      pathParameters: { orderId: "nonexistent" },
+    });
+    const res = await handler(event);
+
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body).error.code).toBe("ORDER_NOT_FOUND");
+  });
+
+  it("returns order with trackingLink when present", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const shippedOrder = { ...mockOrder, status: "SHIPPED", trackingLink: "https://track.example.com/123" };
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Item: shippedOrder } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/orders/order-abc",
+      pathParameters: { orderId: "order-abc" },
+    });
+    const res = await handler(event);
+    const { order } = JSON.parse(res.body);
+
+    expect(order.trackingLink).toBe("https://track.example.com/123");
+  });
+
+  it("returns order with refund fields when present", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const refundOrder = { ...mockOrder, status: "REFUND", refundAmountIDR: 450000, proofOfRefundKey: "proofs/refund.jpg" };
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Item: refundOrder } as never);
+
+    const event = makeEvent({
+      httpMethod: "GET",
+      path: "/orders/order-abc",
+      pathParameters: { orderId: "order-abc" },
+    });
+    const res = await handler(event);
+    const { order } = JSON.parse(res.body);
+
+    expect(order.refundAmountIDR).toBe(450000);
+    expect(order.proofOfRefundKey).toBe("proofs/refund.jpg");
+  });
+});
