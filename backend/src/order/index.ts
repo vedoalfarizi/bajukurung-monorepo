@@ -179,6 +179,46 @@ async function createOrder(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
   return successResponse(201, { orderId });
 }
 
+// ── WhatsApp message generators ───────────────────────────────────────────────
+
+function generateOrderSummaryMessage(order: Record<string, unknown>): string {
+  const customerName = order.customerName as string;
+  const orderId = order.orderId as string;
+  const lineItems = (order.lineItems as LineItem[]) ?? [];
+  const totalPriceIDR = order.totalPriceIDR as number;
+
+  const itemLines = lineItems
+    .map((item, i) => {
+      const lineTotal = item.quantity * item.unitPriceIDR;
+      return `${i + 1}. ${item.productName} - Ukuran ${item.size} x${item.quantity} = Rp ${lineTotal.toLocaleString("id-ID")}`;
+    })
+    .join("\n");
+
+  return `Halo ${customerName}, berikut ringkasan pesanan Anda:
+
+No. Pesanan: ${orderId}
+
+${itemLines}
+
+Total: Rp ${totalPriceIDR.toLocaleString("id-ID")}
+
+Silakan lakukan pembayaran dan konfirmasi kepada kami.
+Terima kasih!`;
+}
+
+function generateTrackingMessage(order: Record<string, unknown>): string {
+  const customerName = order.customerName as string;
+  const orderId = order.orderId as string;
+  const trackingLink = order.trackingLink as string;
+
+  return `Halo ${customerName}, pesanan Anda sudah dikirim!
+
+No. Pesanan: ${orderId}
+Link Tracking: ${trackingLink}
+
+Terima kasih sudah berbelanja!`;
+}
+
 // ── PATCH /orders/{orderId} ───────────────────────────────────────────────────
 
 async function updateOrderStatus(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -195,7 +235,7 @@ async function updateOrderStatus(event: APIGatewayProxyEvent): Promise<APIGatewa
     return errorResponse(400, "VALIDATION_ERROR", "Request body must be valid JSON.");
   }
 
-  const { status: newStatus, ...fields } = body;
+  const { status: newStatus, lineItems: rawLineItems, ...fields } = body;
 
   if (!newStatus || typeof newStatus !== "string") {
     return errorResponse(400, "VALIDATION_ERROR", "status is required.");
@@ -253,6 +293,44 @@ async function updateOrderStatus(event: APIGatewayProxyEvent): Promise<APIGatewa
     }
   }
 
+  // Handle line item edits on PAYMENT_PENDING transition
+  let validatedLineItems: LineItem[] | undefined;
+  if (newStatus === "PAYMENT_PENDING" && rawLineItems !== undefined) {
+    if (!Array.isArray(rawLineItems) || rawLineItems.length === 0) {
+      return errorResponse(400, "VALIDATION_ERROR", "lineItems must be a non-empty array.");
+    }
+    const items = rawLineItems as Record<string, unknown>[];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.productId || typeof item.productId !== "string" || item.productId.trim() === "") {
+        return errorResponse(400, "VALIDATION_ERROR", `lineItems[${i}].productId is required.`);
+      }
+      if (!item.productName || typeof item.productName !== "string" || item.productName.trim() === "") {
+        return errorResponse(400, "VALIDATION_ERROR", `lineItems[${i}].productName is required.`);
+      }
+      if (!item.size || !VALID_SIZES.includes(item.size as StandardSize)) {
+        return errorResponse(400, "VALIDATION_ERROR", `lineItems[${i}].size must be one of: ${VALID_SIZES.join(", ")}.`);
+      }
+      if (typeof item.quantity !== "number" || !Number.isInteger(item.quantity) || item.quantity <= 0) {
+        return errorResponse(400, "VALIDATION_ERROR", `lineItems[${i}].quantity must be a positive integer.`);
+      }
+      if (typeof item.unitPriceIDR !== "number" || item.unitPriceIDR <= 0) {
+        return errorResponse(400, "VALIDATION_ERROR", `lineItems[${i}].unitPriceIDR must be a positive number.`);
+      }
+    }
+    validatedLineItems = items.map((item) => ({
+      productId: item.productId as string,
+      productName: item.productName as string,
+      size: item.size as StandardSize,
+      quantity: item.quantity as number,
+      unitPriceIDR: item.unitPriceIDR as number,
+    }));
+    const newTotal = validatedLineItems.reduce((sum, item) => sum + item.quantity * item.unitPriceIDR, 0);
+    updateParts.push("lineItems = :lineItems", "totalPriceIDR = :totalPriceIDR");
+    expressionAttributeValues[":lineItems"] = validatedLineItems;
+    expressionAttributeValues[":totalPriceIDR"] = newTotal;
+  }
+
   await ddbClient.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
@@ -260,6 +338,20 @@ async function updateOrderStatus(event: APIGatewayProxyEvent): Promise<APIGatewa
       UpdateExpression: `SET ${updateParts.join(", ")}`,
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,
+    })
+  );
+
+  // Write STATUS# history item
+  await ddbClient.send(
+    new PutCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        PK: `ORDER#${orderId}`,
+        SK: `STATUS#${now}`,
+        entityType: "ORDER_STATUS",
+        status: newStatus,
+        changedAt: now,
+      },
     })
   );
 
@@ -271,7 +363,17 @@ async function updateOrderStatus(event: APIGatewayProxyEvent): Promise<APIGatewa
     })
   );
 
-  return successResponse(200, { order: updatedResult.Item });
+  const updatedOrder = updatedResult.Item as Record<string, unknown>;
+
+  // Generate copyable WhatsApp message where applicable
+  let copyableMessage: string | null = null;
+  if (newStatus === "PAYMENT_PENDING") {
+    copyableMessage = generateOrderSummaryMessage(updatedOrder);
+  } else if (newStatus === "SHIPPED") {
+    copyableMessage = generateTrackingMessage(updatedOrder);
+  }
+
+  return successResponse(200, { order: updatedOrder, copyableMessage });
 }
 
 // ── Lambda handler (router) ───────────────────────────────────────────────────

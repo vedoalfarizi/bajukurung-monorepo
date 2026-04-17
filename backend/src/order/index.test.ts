@@ -636,3 +636,227 @@ describe("validateTransition", () => {
     expect(err?.code).toBe("VALIDATION_ERROR");
   });
 });
+
+// ── PATCH /orders/{orderId} tests ─────────────────────────────────────────────
+
+describe("PATCH /orders/{orderId}", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const mockPendingOrder = {
+    PK: "ORDER#order-abc",
+    SK: "METADATA",
+    entityType: "ORDER",
+    orderId: "order-abc",
+    customerName: "Siti Rahayu",
+    customerWhatsApp: "+628123456789",
+    lineItems: [{ productId: "prod-1", productName: "Baju Kurung Moden Raya", size: "M", quantity: 2, unitPriceIDR: 450000 }],
+    totalPriceIDR: 900000,
+    status: "PENDING",
+    trackingLink: null,
+    proofOfPaymentKey: null,
+    proofOfReceiptKey: null,
+    refundAmountIDR: null,
+    proofOfRefundKey: null,
+    createdAt: "2025-02-15T10:30:00Z",
+    updatedAt: "2025-02-15T10:30:00Z",
+  };
+
+  function makePatchEvent(orderId: string, body: unknown): APIGatewayProxyEvent {
+    return makeEvent({
+      httpMethod: "PATCH",
+      path: `/orders/${orderId}`,
+      pathParameters: { orderId },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("returns 404 NOT_FOUND when orderId path parameter is absent", async () => {
+    const event = makeEvent({
+      httpMethod: "PATCH",
+      path: "/orders/",
+      pathParameters: null,
+      body: JSON.stringify({ status: "PAYMENT_PENDING" }),
+    });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 400 VALIDATION_ERROR for invalid JSON body", async () => {
+    const event = makeEvent({
+      httpMethod: "PATCH",
+      path: "/orders/order-abc",
+      pathParameters: { orderId: "order-abc" },
+      body: "not-json",
+    });
+    const res = await handler(event);
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns 400 VALIDATION_ERROR when status is missing", async () => {
+    const res = await handler(makePatchEvent("order-abc", {}));
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns 400 VALIDATION_ERROR for invalid status value", async () => {
+    const res = await handler(makePatchEvent("order-abc", { status: "FLYING" }));
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns 404 ORDER_NOT_FOUND when order doesn't exist", async () => {
+    const { ddbClient } = await import("../shared/index");
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Item: undefined } as never);
+
+    const res = await handler(makePatchEvent("nonexistent", { status: "PAYMENT_PENDING" }));
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body).error.code).toBe("ORDER_NOT_FOUND");
+  });
+
+  it("returns 400 INVALID_STATUS_TRANSITION for invalid transition (PENDING → SHIPPED)", async () => {
+    const { ddbClient } = await import("../shared/index");
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Item: mockPendingOrder } as never);
+
+    const res = await handler(makePatchEvent("order-abc", { status: "SHIPPED" }));
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("INVALID_STATUS_TRANSITION");
+  });
+
+  it("returns 400 VALIDATION_ERROR for missing required fields (READY_TO_SHIP → SHIPPED without trackingLink)", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const readyOrder = { ...mockPendingOrder, status: "READY_TO_SHIP" };
+    vi.mocked(ddbClient.send).mockResolvedValueOnce({ Item: readyOrder } as never);
+
+    const res = await handler(makePatchEvent("order-abc", { status: "SHIPPED" }));
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns 200 with updated order on valid transition (PENDING → PAYMENT_PENDING)", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const updatedOrder = { ...mockPendingOrder, status: "PAYMENT_PENDING" };
+    vi.mocked(ddbClient.send)
+      .mockResolvedValueOnce({ Item: mockPendingOrder } as never) // GetCommand (fetch current)
+      .mockResolvedValueOnce({} as never)                          // UpdateCommand
+      .mockResolvedValueOnce({} as never)                          // PutCommand (history)
+      .mockResolvedValueOnce({ Item: updatedOrder } as never);     // GetCommand (fetch updated)
+
+    const res = await handler(makePatchEvent("order-abc", { status: "PAYMENT_PENDING" }));
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.order.status).toBe("PAYMENT_PENDING");
+  });
+
+  it("writes STATUS# history item to DynamoDB on successful transition", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const updatedOrder = { ...mockPendingOrder, status: "PAYMENT_PENDING" };
+    vi.mocked(ddbClient.send)
+      .mockResolvedValueOnce({ Item: mockPendingOrder } as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({ Item: updatedOrder } as never);
+
+    await handler(makePatchEvent("order-abc", { status: "PAYMENT_PENDING" }));
+
+    const calls = vi.mocked(ddbClient.send).mock.calls;
+    // Third call (index 2) should be the PutCommand for history
+    const putCall = calls[2][0] as { input: { Item: Record<string, unknown> } };
+    expect(putCall.input.Item.PK).toBe("ORDER#order-abc");
+    expect((putCall.input.Item.SK as string).startsWith("STATUS#")).toBe(true);
+    expect(putCall.input.Item.entityType).toBe("ORDER_STATUS");
+    expect(putCall.input.Item.status).toBe("PAYMENT_PENDING");
+    expect(putCall.input.Item.changedAt).toBeDefined();
+  });
+
+  it("returns copyableMessage for PAYMENT_PENDING transition", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const updatedOrder = { ...mockPendingOrder, status: "PAYMENT_PENDING" };
+    vi.mocked(ddbClient.send)
+      .mockResolvedValueOnce({ Item: mockPendingOrder } as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({ Item: updatedOrder } as never);
+
+    const res = await handler(makePatchEvent("order-abc", { status: "PAYMENT_PENDING" }));
+    const body = JSON.parse(res.body);
+    expect(typeof body.copyableMessage).toBe("string");
+    expect(body.copyableMessage).toContain("Siti Rahayu");
+    expect(body.copyableMessage).toContain("order-abc");
+    expect(body.copyableMessage).toContain("pembayaran");
+  });
+
+  it("returns copyableMessage for SHIPPED transition", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const readyOrder = { ...mockPendingOrder, status: "READY_TO_SHIP" };
+    const shippedOrder = { ...mockPendingOrder, status: "SHIPPED", trackingLink: "https://track.example.com/123" };
+    vi.mocked(ddbClient.send)
+      .mockResolvedValueOnce({ Item: readyOrder } as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({ Item: shippedOrder } as never);
+
+    const res = await handler(makePatchEvent("order-abc", { status: "SHIPPED", trackingLink: "https://track.example.com/123" }));
+    const body = JSON.parse(res.body);
+    expect(typeof body.copyableMessage).toBe("string");
+    expect(body.copyableMessage).toContain("Siti Rahayu");
+    expect(body.copyableMessage).toContain("order-abc");
+    expect(body.copyableMessage).toContain("https://track.example.com/123");
+  });
+
+  it("returns null copyableMessage for transitions that don't generate messages (PACKAGED → READY_TO_SHIP)", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const packagedOrder = { ...mockPendingOrder, status: "PACKAGED" };
+    const readyOrder = { ...mockPendingOrder, status: "READY_TO_SHIP" };
+    vi.mocked(ddbClient.send)
+      .mockResolvedValueOnce({ Item: packagedOrder } as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({ Item: readyOrder } as never);
+
+    const res = await handler(makePatchEvent("order-abc", { status: "READY_TO_SHIP" }));
+    const body = JSON.parse(res.body);
+    expect(body.copyableMessage).toBeNull();
+  });
+
+  it("allows line item edits when transitioning to PAYMENT_PENDING", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const newLineItems = [
+      { productId: "prod-2", productName: "Baju Kurung Klasik", size: "L", quantity: 1, unitPriceIDR: 600000 },
+    ];
+    const updatedOrder = { ...mockPendingOrder, status: "PAYMENT_PENDING", lineItems: newLineItems, totalPriceIDR: 600000 };
+    vi.mocked(ddbClient.send)
+      .mockResolvedValueOnce({ Item: mockPendingOrder } as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({ Item: updatedOrder } as never);
+
+    const res = await handler(makePatchEvent("order-abc", { status: "PAYMENT_PENDING", lineItems: newLineItems }));
+    expect(res.statusCode).toBe(200);
+
+    const updateCall = vi.mocked(ddbClient.send).mock.calls[1][0] as {
+      input: { ExpressionAttributeValues: Record<string, unknown> };
+    };
+    expect(updateCall.input.ExpressionAttributeValues[":lineItems"]).toEqual(newLineItems);
+  });
+
+  it("recalculates totalPriceIDR when line items are updated on PAYMENT_PENDING", async () => {
+    const { ddbClient } = await import("../shared/index");
+    const newLineItems = [
+      { productId: "prod-2", productName: "Baju Kurung Klasik", size: "L", quantity: 3, unitPriceIDR: 200000 },
+    ];
+    const updatedOrder = { ...mockPendingOrder, status: "PAYMENT_PENDING", lineItems: newLineItems, totalPriceIDR: 600000 };
+    vi.mocked(ddbClient.send)
+      .mockResolvedValueOnce({ Item: mockPendingOrder } as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce({ Item: updatedOrder } as never);
+
+    await handler(makePatchEvent("order-abc", { status: "PAYMENT_PENDING", lineItems: newLineItems }));
+
+    const updateCall = vi.mocked(ddbClient.send).mock.calls[1][0] as {
+      input: { ExpressionAttributeValues: Record<string, unknown> };
+    };
+    expect(updateCall.input.ExpressionAttributeValues[":totalPriceIDR"]).toBe(3 * 200000);
+  });
+});

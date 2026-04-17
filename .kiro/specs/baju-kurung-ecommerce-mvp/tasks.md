@@ -105,7 +105,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [ ]* 7.4 Write property test for missing required fields rejected (Property 9c)
     - **Property 9c: Status transitions with missing required fields are rejected**
     - **Validates: Requirements 5.5, 5.6, 5.8**
-  - [ ] 7.5 Implement `PATCH /orders/{orderId}` handler (Seller JWT): apply state machine, write updated Order item and a STATUS# history item to DynamoDB; return updated order and copyable WhatsApp message where applicable
+  - [x] 7.5 Implement `PATCH /orders/{orderId}` handler (Seller JWT): apply state machine, write updated Order item and a STATUS# history item to DynamoDB; return updated order and copyable WhatsApp message where applicable
     - On PAYMENT_PENDING: allow line item edits, generate order summary copyable message
     - On SHIPPED: require trackingLink, generate tracking copyable message
     - On PACKAGED: require proofOfPaymentKey
