@@ -1,8 +1,9 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "crypto";
 import type { LineItem, OrderStatus, StandardSize } from "@baju-kurung/shared";
 import { ddbClient, TABLE_NAME, errorResponse, successResponse } from "../shared/index";
+import { validateTransition } from "./stateMachine";
 
 const VALID_ORDER_STATUSES: OrderStatus[] = [
   "PENDING",
@@ -178,6 +179,101 @@ async function createOrder(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
   return successResponse(201, { orderId });
 }
 
+// ── PATCH /orders/{orderId} ───────────────────────────────────────────────────
+
+async function updateOrderStatus(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const orderId = event.pathParameters?.orderId;
+
+  if (!orderId || orderId.trim() === "") {
+    return errorResponse(400, "VALIDATION_ERROR", "orderId path parameter is required.");
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(event.body ?? "{}");
+  } catch {
+    return errorResponse(400, "VALIDATION_ERROR", "Request body must be valid JSON.");
+  }
+
+  const { status: newStatus, ...fields } = body;
+
+  if (!newStatus || typeof newStatus !== "string") {
+    return errorResponse(400, "VALIDATION_ERROR", "status is required.");
+  }
+
+  if (!VALID_ORDER_STATUSES.includes(newStatus as OrderStatus)) {
+    return errorResponse(
+      400,
+      "VALIDATION_ERROR",
+      `Invalid status value. Must be one of: ${VALID_ORDER_STATUSES.join(", ")}.`
+    );
+  }
+
+  // Fetch current order
+  const getResult = await ddbClient.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `ORDER#${orderId}`, SK: "METADATA" },
+    })
+  );
+
+  if (!getResult.Item) {
+    return errorResponse(404, "ORDER_NOT_FOUND", `Order with id '${orderId}' was not found.`);
+  }
+
+  const currentStatus = getResult.Item.status as OrderStatus;
+
+  // Validate the transition
+  const transitionError = validateTransition(currentStatus, newStatus as OrderStatus, fields);
+  if (transitionError) {
+    return errorResponse(400, transitionError.code, transitionError.message);
+  }
+
+  // Build update expression for the allowed optional fields
+  const now = new Date().toISOString();
+  const allowedFields: (keyof typeof fields)[] = [
+    "trackingLink",
+    "proofOfPaymentKey",
+    "proofOfReceiptKey",
+    "refundAmountIDR",
+    "proofOfRefundKey",
+  ];
+
+  const updateParts: string[] = ["#status = :status", "updatedAt = :updatedAt"];
+  const expressionAttributeNames: Record<string, string> = { "#status": "status" };
+  const expressionAttributeValues: Record<string, unknown> = {
+    ":status": newStatus,
+    ":updatedAt": now,
+  };
+
+  for (const field of allowedFields) {
+    if (fields[field] !== undefined) {
+      updateParts.push(`${field} = :${field}`);
+      expressionAttributeValues[`:${field}`] = fields[field];
+    }
+  }
+
+  await ddbClient.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `ORDER#${orderId}`, SK: "METADATA" },
+      UpdateExpression: `SET ${updateParts.join(", ")}`,
+      ExpressionAttributeNames: expressionAttributeNames,
+      ExpressionAttributeValues: expressionAttributeValues,
+    })
+  );
+
+  // Return updated order
+  const updatedResult = await ddbClient.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `ORDER#${orderId}`, SK: "METADATA" },
+    })
+  );
+
+  return successResponse(200, { order: updatedResult.Item });
+}
+
 // ── Lambda handler (router) ───────────────────────────────────────────────────
 
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -192,6 +288,11 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // GET /orders/{orderId}
     if (httpMethod === "GET" && event.pathParameters?.orderId) {
       return await getOrder(event);
+    }
+
+    // PATCH /orders/{orderId}
+    if (httpMethod === "PATCH" && event.pathParameters?.orderId) {
+      return await updateOrderStatus(event);
     }
 
     // POST /orders

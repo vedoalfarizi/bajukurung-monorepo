@@ -93,7 +93,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
     - **Validates: Requirements 5.7**
 
 - [ ] 7. Order Service Lambda — status transitions
-  - [ ] 7.1 Implement order status state machine: define valid transitions and required fields per transition; reject invalid transitions with `400 INVALID_STATUS_TRANSITION`
+  - [x] 7.1 Implement order status state machine: define valid transitions and required fields per transition; reject invalid transitions with `400 INVALID_STATUS_TRANSITION`
     - Valid transitions: PENDING→PAYMENT_PENDING, PAYMENT_PENDING→PACKAGED, PACKAGED→READY_TO_SHIP, READY_TO_SHIP→SHIPPED, SHIPPED→DELIVERED, PENDING→CANCELLED, PAYMENT_PENDING→CANCELLED, PACKAGED→REFUND, SHIPPED→REFUND, DELIVERED→REFUND
     - _Requirements: 3.5, 5.10_
   - [ ]* 7.2 Write property test for valid status transitions (Property 9)

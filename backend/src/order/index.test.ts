@@ -499,3 +499,140 @@ describe("GET /orders/{orderId}", () => {
     expect(order.proofOfRefundKey).toBe("proofs/refund.jpg");
   });
 });
+
+// ── validateTransition (state machine) tests ─────────────────────────────────
+
+import { validateTransition } from "./stateMachine";
+
+describe("validateTransition", () => {
+  // ── Valid transitions ───────────────────────────────────────────────────────
+
+  it("PENDING → PAYMENT_PENDING is valid (no required fields)", () => {
+    expect(validateTransition("PENDING", "PAYMENT_PENDING", {})).toBeNull();
+  });
+
+  it("PENDING → CANCELLED is valid", () => {
+    expect(validateTransition("PENDING", "CANCELLED", {})).toBeNull();
+  });
+
+  it("PAYMENT_PENDING → PACKAGED is valid with proofOfPaymentKey", () => {
+    expect(validateTransition("PAYMENT_PENDING", "PACKAGED", { proofOfPaymentKey: "proofs/pay.jpg" })).toBeNull();
+  });
+
+  it("PAYMENT_PENDING → CANCELLED is valid", () => {
+    expect(validateTransition("PAYMENT_PENDING", "CANCELLED", {})).toBeNull();
+  });
+
+  it("PACKAGED → READY_TO_SHIP is valid (no required fields)", () => {
+    expect(validateTransition("PACKAGED", "READY_TO_SHIP", {})).toBeNull();
+  });
+
+  it("PACKAGED → REFUND is valid with required fields", () => {
+    expect(
+      validateTransition("PACKAGED", "REFUND", { refundAmountIDR: 450000, proofOfRefundKey: "proofs/refund.jpg" })
+    ).toBeNull();
+  });
+
+  it("READY_TO_SHIP → SHIPPED is valid with trackingLink", () => {
+    expect(validateTransition("READY_TO_SHIP", "SHIPPED", { trackingLink: "https://track.example.com/123" })).toBeNull();
+  });
+
+  it("SHIPPED → DELIVERED is valid (no required fields)", () => {
+    expect(validateTransition("SHIPPED", "DELIVERED", {})).toBeNull();
+  });
+
+  it("SHIPPED → DELIVERED is valid with optional proofOfReceiptKey", () => {
+    expect(validateTransition("SHIPPED", "DELIVERED", { proofOfReceiptKey: "proofs/receipt.jpg" })).toBeNull();
+  });
+
+  it("SHIPPED → REFUND is valid with required fields", () => {
+    expect(
+      validateTransition("SHIPPED", "REFUND", { refundAmountIDR: 450000, proofOfRefundKey: "proofs/refund.jpg" })
+    ).toBeNull();
+  });
+
+  it("DELIVERED → REFUND is valid with required fields", () => {
+    expect(
+      validateTransition("DELIVERED", "REFUND", { refundAmountIDR: 450000, proofOfRefundKey: "proofs/refund.jpg" })
+    ).toBeNull();
+  });
+
+  // ── Invalid transitions → INVALID_STATUS_TRANSITION ────────────────────────
+
+  it("PENDING → SHIPPED returns INVALID_STATUS_TRANSITION", () => {
+    const err = validateTransition("PENDING", "SHIPPED", {});
+    expect(err?.code).toBe("INVALID_STATUS_TRANSITION");
+  });
+
+  it("PENDING → DELIVERED returns INVALID_STATUS_TRANSITION", () => {
+    const err = validateTransition("PENDING", "DELIVERED", {});
+    expect(err?.code).toBe("INVALID_STATUS_TRANSITION");
+  });
+
+  it("PENDING → REFUND returns INVALID_STATUS_TRANSITION", () => {
+    const err = validateTransition("PENDING", "REFUND", {});
+    expect(err?.code).toBe("INVALID_STATUS_TRANSITION");
+  });
+
+  it("DELIVERED → PENDING returns INVALID_STATUS_TRANSITION", () => {
+    const err = validateTransition("DELIVERED", "PENDING", {});
+    expect(err?.code).toBe("INVALID_STATUS_TRANSITION");
+  });
+
+  it("CANCELLED → PENDING returns INVALID_STATUS_TRANSITION", () => {
+    const err = validateTransition("CANCELLED", "PENDING", {});
+    expect(err?.code).toBe("INVALID_STATUS_TRANSITION");
+  });
+
+  it("REFUND → PENDING returns INVALID_STATUS_TRANSITION", () => {
+    const err = validateTransition("REFUND", "PENDING", {});
+    expect(err?.code).toBe("INVALID_STATUS_TRANSITION");
+  });
+
+  it("SHIPPED → PACKAGED returns INVALID_STATUS_TRANSITION", () => {
+    const err = validateTransition("SHIPPED", "PACKAGED", {});
+    expect(err?.code).toBe("INVALID_STATUS_TRANSITION");
+  });
+
+  it("PACKAGED → PAYMENT_PENDING returns INVALID_STATUS_TRANSITION", () => {
+    const err = validateTransition("PACKAGED", "PAYMENT_PENDING", {});
+    expect(err?.code).toBe("INVALID_STATUS_TRANSITION");
+  });
+
+  // ── Missing required fields → VALIDATION_ERROR ─────────────────────────────
+
+  it("PAYMENT_PENDING → PACKAGED without proofOfPaymentKey returns VALIDATION_ERROR", () => {
+    const err = validateTransition("PAYMENT_PENDING", "PACKAGED", {});
+    expect(err?.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("READY_TO_SHIP → SHIPPED without trackingLink returns VALIDATION_ERROR", () => {
+    const err = validateTransition("READY_TO_SHIP", "SHIPPED", {});
+    expect(err?.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("PACKAGED → REFUND without refundAmountIDR returns VALIDATION_ERROR", () => {
+    const err = validateTransition("PACKAGED", "REFUND", { proofOfRefundKey: "proofs/refund.jpg" });
+    expect(err?.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("PACKAGED → REFUND without proofOfRefundKey returns VALIDATION_ERROR", () => {
+    const err = validateTransition("PACKAGED", "REFUND", { refundAmountIDR: 450000 });
+    expect(err?.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("SHIPPED → REFUND without both required fields returns VALIDATION_ERROR", () => {
+    const err = validateTransition("SHIPPED", "REFUND", {});
+    expect(err?.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("DELIVERED → REFUND without both required fields returns VALIDATION_ERROR", () => {
+    const err = validateTransition("DELIVERED", "REFUND", {});
+    expect(err?.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("null/empty string field values are treated as missing", () => {
+    const err = validateTransition("READY_TO_SHIP", "SHIPPED", { trackingLink: "" });
+    expect(err?.code).toBe("VALIDATION_ERROR");
+  });
+});
