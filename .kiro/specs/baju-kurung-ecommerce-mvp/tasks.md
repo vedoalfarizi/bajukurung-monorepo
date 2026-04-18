@@ -141,7 +141,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
     - **Validates: Requirements 5.6**
 
 - [ ] 10. Frontend — cart store
-  - [ ] 10.1 Implement `cartStore` using Zustand backed by localStorage: add item (with size validation and Pre-Order Window guard), remove item, update quantity, clear cart
+  - [x] 10.1 Implement `cartStore` using Zustand backed by localStorage: add item (with size validation and Pre-Order Window guard), remove item, update quantity, clear cart
     - Guard: reject add if preOrderWindowEnd < today (display toast)
     - Guard: reject add if size not in product's availableSizes
     - Guard: reject checkout if cart is empty
