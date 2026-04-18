@@ -35,6 +35,21 @@ export function generateOrderIntentLink(
 }
 
 /**
+ * Generates a copyable Bahasa Indonesia tracking message for the Seller to send
+ * to the customer when transitioning to SHIPPED status.
+ */
+export function generateTrackingMessage(order: Order): string {
+  return [
+    `Halo ${order.customerName}, pesanan Anda sudah dikirim!`,
+    ``,
+    `No. Pesanan: ${order.orderId}`,
+    `Link Tracking: ${order.trackingLink}`,
+    ``,
+    `Terima kasih sudah berbelanja!`,
+  ].join("\n");
+}
+
+/**
  * Generates a copyable Bahasa Indonesia order summary message for the Seller to send
  * to the customer when transitioning to PAYMENT_PENDING status.
  */

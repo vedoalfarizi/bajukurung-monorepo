@@ -133,7 +133,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [ ]* 9.4 Write property test for order summary copyable message (Property 12b)
     - **Property 12b: Order summary copyable message contains all required fields**
     - **Validates: Requirements 5.4**
-  - [ ] 9.5 Implement `generateTrackingMessage(order): string`
+  - [x] 9.5 Implement `generateTrackingMessage(order): string`
     - Returns Bahasa Indonesia copyable text for SHIPPED transition
     - _Requirements: 5.6_
   - [ ]* 9.6 Write property test for tracking link copyable message (Property 12c)
