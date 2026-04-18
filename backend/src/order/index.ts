@@ -1,10 +1,10 @@
-import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from "aws-lambda";
 import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 import type { LineItem, OrderStatus, StandardSize } from "@baju-kurung/shared";
-import { ddbClient, TABLE_NAME, errorResponse, successResponse } from "../shared/index";
+import { ddbClient, TABLE_NAME, errorResponse, successResponse, withErrorHandler } from "../shared/index";
 import { validateTransition } from "./stateMachine";
 
 const s3Client = new S3Client({});
@@ -430,38 +430,35 @@ async function generateUploadUrl(event: APIGatewayProxyEvent): Promise<APIGatewa
 
 // ── Lambda handler (router) ───────────────────────────────────────────────────
 
-export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+async function orderHandler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const { httpMethod, path } = event;
 
-  try {
-    // GET /orders
-    if (httpMethod === "GET" && path === "/orders") {
-      return await listOrders(event);
-    }
-
-    // GET /orders/{orderId}
-    if (httpMethod === "GET" && event.pathParameters?.orderId) {
-      return await getOrder(event);
-    }
-
-    // PATCH /orders/{orderId}
-    if (httpMethod === "PATCH" && event.pathParameters?.orderId) {
-      return await updateOrderStatus(event);
-    }
-
-    // POST /orders/{orderId}/uploads
-    if (httpMethod === "POST" && event.pathParameters?.orderId && path.endsWith("/uploads")) {
-      return await generateUploadUrl(event);
-    }
-
-    // POST /orders
-    if (httpMethod === "POST" && path === "/orders") {
-      return await createOrder(event);
-    }
-
-    return errorResponse(404, "NOT_FOUND", `Route ${httpMethod} ${path} not found.`);
-  } catch (err) {
-    console.error("Unhandled error", { requestId: event.requestContext?.requestId, path, httpMethod, err });
-    return errorResponse(500, "INTERNAL_ERROR", "An unexpected error occurred.");
+  // GET /orders
+  if (httpMethod === "GET" && path === "/orders") {
+    return await listOrders(event);
   }
+
+  // GET /orders/{orderId}
+  if (httpMethod === "GET" && event.pathParameters?.orderId) {
+    return await getOrder(event);
+  }
+
+  // PATCH /orders/{orderId}
+  if (httpMethod === "PATCH" && event.pathParameters?.orderId) {
+    return await updateOrderStatus(event);
+  }
+
+  // POST /orders/{orderId}/uploads
+  if (httpMethod === "POST" && event.pathParameters?.orderId && path.endsWith("/uploads")) {
+    return await generateUploadUrl(event);
+  }
+
+  // POST /orders
+  if (httpMethod === "POST" && path === "/orders") {
+    return await createOrder(event);
+  }
+
+  return errorResponse(404, "NOT_FOUND", `Route ${httpMethod} ${path} not found.`);
 }
+
+export const handler = withErrorHandler(orderHandler);

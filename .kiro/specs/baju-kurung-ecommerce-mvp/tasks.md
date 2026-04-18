@@ -184,7 +184,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [x] 13.4 Implement `AddProductForm`: all required fields (name, occasion, description, fabricType, colours, availableSizes, per-size sizeChart inputs, priceIDR, image upload to S3 via pre-signed URL, preOrderWindowStart, preOrderWindowEnd); client-side validation; call `POST /products` with Seller JWT
     - _Requirements: 0.1, 0.2, 0.3, 0.4, 0.5_
 
-- [ ] 14. Lambda error handling and CloudWatch logging
+- [x] 14. Lambda error handling and CloudWatch logging
   - Wrap all Lambda handlers in a top-level try/catch; log unhandled errors to CloudWatch with requestId, path, and method; return `500 INTERNAL_ERROR` without exposing stack traces
   - _Requirements: 6.7_
 

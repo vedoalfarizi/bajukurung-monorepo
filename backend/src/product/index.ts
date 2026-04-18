@@ -1,8 +1,8 @@
-import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from "aws-lambda";
 import { GetCommand, PutCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "crypto";
 import type { Occasion, StandardSize } from "@baju-kurung/shared";
-import { ddbClient, TABLE_NAME, errorResponse, successResponse } from "../shared/index";
+import { ddbClient, TABLE_NAME, errorResponse, successResponse, withErrorHandler } from "../shared/index";
 
 const VALID_OCCASIONS: Occasion[] = ["Raya", "Wedding", "Casual"];
 const VALID_SIZES: StandardSize[] = ["XS", "S", "M", "L", "XL", "XXL", "AllSize"];
@@ -251,28 +251,25 @@ async function getProduct(productId: string): Promise<APIGatewayProxyResult> {
 
 // ── Lambda handler (router) ───────────────────────────────────────────────────
 
-export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+async function productHandler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const { httpMethod, path } = event;
 
-  try {
-    // GET /products
-    if (httpMethod === "GET" && path === "/products") {
-      return await listProducts(event);
-    }
-
-    // GET /products/{productId}
-    if (httpMethod === "GET" && event.pathParameters?.productId) {
-      return await getProduct(event.pathParameters.productId);
-    }
-
-    // POST /products
-    if (httpMethod === "POST" && path === "/products") {
-      return await createProduct(event);
-    }
-
-    return errorResponse(404, "NOT_FOUND", `Route ${httpMethod} ${path} not found.`);
-  } catch (err) {
-    console.error("Unhandled error", { requestId: event.requestContext?.requestId, path, httpMethod, err });
-    return errorResponse(500, "INTERNAL_ERROR", "An unexpected error occurred.");
+  // GET /products
+  if (httpMethod === "GET" && path === "/products") {
+    return await listProducts(event);
   }
+
+  // GET /products/{productId}
+  if (httpMethod === "GET" && event.pathParameters?.productId) {
+    return await getProduct(event.pathParameters.productId);
+  }
+
+  // POST /products
+  if (httpMethod === "POST" && path === "/products") {
+    return await createProduct(event);
+  }
+
+  return errorResponse(404, "NOT_FOUND", `Route ${httpMethod} ${path} not found.`);
 }
+
+export const handler = withErrorHandler(productHandler);

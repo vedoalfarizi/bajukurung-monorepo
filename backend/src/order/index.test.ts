@@ -15,6 +15,7 @@ vi.mock("../shared/index", () => ({
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   }),
+  withErrorHandler: (fn: Function) => fn,
 }));
 
 // ── Mock S3 presigner so tests don't hit AWS ──────────────────────────────────
