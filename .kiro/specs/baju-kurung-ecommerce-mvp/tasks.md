@@ -174,14 +174,14 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [x] 12.2 Implement `CheckoutModal`: collect customerName and customerWhatsApp; validate non-empty; call `POST /orders`; on success call `generateOrderIntentLink()` and open WhatsApp deep link; handle API errors with toast + retry
     - _Requirements: 4.5, 4.6, 4.7, 4.8, 4.9_
 
-- [ ] 13. Frontend — Seller dashboard
-  - [ ] 13.1 Implement Cognito-gated login flow: redirect unauthenticated users to Cognito hosted UI; store JWT; attach `Authorization: Bearer {jwt}` to all dashboard API calls
+- [x] 13. Frontend — Seller dashboard
+  - [x] 13.1 Implement Cognito-gated login flow: redirect unauthenticated users to Cognito hosted UI; store JWT; attach `Authorization: Bearer {jwt}` to all dashboard API calls
     - _Requirements: 0.1, 5.1, 6.6_
-  - [ ] 13.2 Implement `SellerDashboard` order list: fetch `GET /orders`, display orderId, status, customerName, customerWhatsApp, line items, totalPriceIDR, createdAt; support status filter tabs
+  - [x] 13.2 Implement `SellerDashboard` order list: fetch `GET /orders`, display orderId, status, customerName, customerWhatsApp, line items, totalPriceIDR, createdAt; support status filter tabs
     - _Requirements: 5.2, 5.3_
-  - [ ] 13.3 Implement order detail view and status transition UI: render current status, all order fields, proof photos, tracking link, refund amount; render action button for each valid next status; collect required fields per transition (proof photo upload via pre-signed URL, tracking link input, refund amount input); display copyable WhatsApp message blocks for PAYMENT_PENDING and SHIPPED transitions; show error on invalid transition attempt
+  - [x] 13.3 Implement order detail view and status transition UI: render current status, all order fields, proof photos, tracking link, refund amount; render action button for each valid next status; collect required fields per transition (proof photo upload via pre-signed URL, tracking link input, refund amount input); display copyable WhatsApp message blocks for PAYMENT_PENDING and SHIPPED transitions; show error on invalid transition attempt
     - _Requirements: 5.4, 5.5, 5.6, 5.7, 5.8, 5.10, 5.11_
-  - [ ] 13.4 Implement `AddProductForm`: all required fields (name, occasion, description, fabricType, colours, availableSizes, per-size sizeChart inputs, priceIDR, image upload to S3 via pre-signed URL, preOrderWindowStart, preOrderWindowEnd); client-side validation; call `POST /products` with Seller JWT
+  - [x] 13.4 Implement `AddProductForm`: all required fields (name, occasion, description, fabricType, colours, availableSizes, per-size sizeChart inputs, priceIDR, image upload to S3 via pre-signed URL, preOrderWindowStart, preOrderWindowEnd); client-side validation; call `POST /products` with Seller JWT
     - _Requirements: 0.1, 0.2, 0.3, 0.4, 0.5_
 
 - [ ] 14. Lambda error handling and CloudWatch logging

@@ -1,5 +1,16 @@
 import type { CartItem, Order } from "../../../shared/types";
 
+export {
+  getToken,
+  storeToken,
+  clearToken,
+  isAuthenticated,
+  redirectToLogin,
+  redirectToLogout,
+  exchangeCodeForToken,
+  authFetch,
+} from "./auth";
+
 /**
  * Generates a WhatsApp deep link with a pre-filled order intent message in Bahasa Indonesia.
  */
