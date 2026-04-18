@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "declaration": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "..",
     "resolveJsonModule": true,
     "paths": {
       "@baju-kurung/shared": ["../shared/types.ts"]
