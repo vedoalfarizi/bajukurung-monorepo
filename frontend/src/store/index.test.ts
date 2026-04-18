@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { useCartStore } from "./index";
 import type { CartItem, StandardSize } from "../../../shared/types";
 

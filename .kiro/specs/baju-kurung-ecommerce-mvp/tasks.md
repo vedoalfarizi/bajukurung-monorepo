@@ -157,7 +157,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
     - _Requirements: 2.6, 3.3, 4.8_
 
 - [ ] 11. Frontend — product browsing pages
-  - [ ] 11.1 Implement `CataloguePage`: fetch `GET /products?occasion=`, render product cards (name, primary image, price in IDR, available sizes, Pre-Order Window dates); support occasion tabs and size filter; show "no results" message when empty
+  - [x] 11.1 Implement `CataloguePage`: fetch `GET /products?occasion=`, render product cards (name, primary image, price in IDR, available sizes, Pre-Order Window dates); support occasion tabs and size filter; show "no results" message when empty
     - _Requirements: 1.1, 1.3, 1.4, 1.5, 1.7_
   - [ ]* 11.2 Write property test for available sizes constraint in size selector (Property 6)
     - **Property 6: Only available sizes are selectable for a product**

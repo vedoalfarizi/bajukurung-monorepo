@@ -188,7 +188,7 @@ describe("generateOrderSummaryMessage", () => {
     const lineItemArb = fc.record({
       productId: fc.uuid(),
       productName: fc.string({ minLength: 1, maxLength: 50 }).filter((s) => s.trim().length > 0),
-      size: fc.constantFrom("XS", "S", "M", "L", "XL", "XXL", "AllSize" as const),
+      size: fc.constantFrom<"XS" | "S" | "M" | "L" | "XL" | "XXL" | "AllSize">("XS", "S", "M", "L", "XL", "XXL", "AllSize"),
       quantity: fc.integer({ min: 1, max: 99 }),
       unitPriceIDR: fc.integer({ min: 1000, max: 10_000_000 }),
     });
