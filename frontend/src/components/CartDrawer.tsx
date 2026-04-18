@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useCartStore } from "../store";
 import type { CartItem } from "../types";
+import { CheckoutModal } from "./CheckoutModal";
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -44,6 +46,7 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const items = useCartStore((s) => s.items);
   const subtotal = useCartStore((s) => s.subtotal);
   const removeItem = useCartStore((s) => s.removeItem);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   return (
     <>
@@ -98,7 +101,26 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             <span style={{ fontWeight: 700, fontSize: 16 }}>{formatIDR(subtotal)}</span>
           </div>
         )}
+
+        {/* Checkout button */}
+        {items.length > 0 && (
+          <div style={{ padding: "12px 20px", borderTop: "1px solid #e0e0e0" }}>
+            <button
+              onClick={() => setCheckoutOpen(true)}
+              style={checkoutButtonStyle}
+              aria-label="Lanjut ke checkout"
+            >
+              Checkout via WhatsApp
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Checkout Modal */}
+      <CheckoutModal
+        isOpen={checkoutOpen}
+        onClose={() => setCheckoutOpen(false)}
+      />
     </>
   );
 }
@@ -175,4 +197,16 @@ const closeButtonStyle: React.CSSProperties = {
   color: "#555",
   padding: 4,
   lineHeight: 1,
+};
+
+const checkoutButtonStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "12px",
+  background: "#25D366",
+  color: "#fff",
+  border: "none",
+  borderRadius: 8,
+  fontSize: 15,
+  fontWeight: 600,
+  cursor: "pointer",
 };
