@@ -127,7 +127,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [ ]* 9.2 Write property test for customer order intent message (Property 12)
     - **Property 12: Customer order intent message contains all required information**
     - **Validates: Requirements 4.5, 4.6**
-  - [ ] 9.3 Implement `generateOrderSummaryMessage(order): string`
+  - [x] 9.3 Implement `generateOrderSummaryMessage(order): string`
     - Returns Bahasa Indonesia copyable text for PAYMENT_PENDING transition
     - _Requirements: 5.4_
   - [ ]* 9.4 Write property test for order summary copyable message (Property 12b)

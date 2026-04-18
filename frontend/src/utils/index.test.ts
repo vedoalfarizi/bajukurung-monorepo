@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { generateOrderIntentLink } from "./index";
-import type { CartItem } from "../../../shared/types";
+import { generateOrderIntentLink, generateOrderSummaryMessage } from "./index";
+import type { CartItem, Order } from "../../../shared/types";
 
 const sampleCart: CartItem[] = [
   {
@@ -117,6 +117,115 @@ describe("generateOrderIntentLink", () => {
           expect(text).toContain("Terima kasih");
         }
       ),
+      { numRuns: 100 }
+    );
+  });
+});
+
+const sampleOrder: Order = {
+  orderId: "ORD-001",
+  customerName: "Siti",
+  customerWhatsApp: "60123456789",
+  lineItems: [
+    { productId: "p1", productName: "Baju Kurung Raya", size: "M", quantity: 2, unitPriceIDR: 450000 },
+    { productId: "p2", productName: "Baju Kurung Kasual", size: "L", quantity: 1, unitPriceIDR: 300000 },
+  ],
+  totalPriceIDR: 1200000,
+  status: "PAYMENT_PENDING",
+  trackingLink: null,
+  proofOfPaymentKey: null,
+  proofOfReceiptKey: null,
+  refundAmountIDR: null,
+  proofOfRefundKey: null,
+  createdAt: "2025-01-01T00:00:00Z",
+  updatedAt: "2025-01-01T00:00:00Z",
+};
+
+describe("generateOrderSummaryMessage", () => {
+  it("contains customer name greeting", () => {
+    const msg = generateOrderSummaryMessage(sampleOrder);
+    expect(msg).toContain("Halo Siti, berikut ringkasan pesanan Anda:");
+  });
+
+  it("contains order ID", () => {
+    const msg = generateOrderSummaryMessage(sampleOrder);
+    expect(msg).toContain("No. Pesanan: ORD-001");
+  });
+
+  it("contains line items with correct line totals as plain numbers", () => {
+    const msg = generateOrderSummaryMessage(sampleOrder);
+    // 2 × 450000 = 900000
+    expect(msg).toContain("Baju Kurung Raya - Ukuran M x2 = Rp 900000");
+    // 1 × 300000 = 300000
+    expect(msg).toContain("Baju Kurung Kasual - Ukuran L x1 = Rp 300000");
+  });
+
+  it("contains total as plain number", () => {
+    const msg = generateOrderSummaryMessage(sampleOrder);
+    expect(msg).toContain("Total: Rp 1200000");
+  });
+
+  it("contains payment instruction and closing phrase", () => {
+    const msg = generateOrderSummaryMessage(sampleOrder);
+    expect(msg).toContain("Silakan lakukan pembayaran dan konfirmasi kepada kami.");
+    expect(msg).toContain("Terima kasih!");
+  });
+
+  it("does not use locale-formatted numbers (no dots as thousand separators)", () => {
+    const msg = generateOrderSummaryMessage(sampleOrder);
+    // Should NOT contain "900.000" style formatting
+    expect(msg).not.toContain("900.000");
+    expect(msg).not.toContain("300.000");
+    expect(msg).not.toContain("1.200.000");
+  });
+
+  /**
+   * **Validates: Requirements 5.4**
+   * Property: for any order, the summary message always contains the customer name,
+   * order ID, correct line totals as plain numbers, and closing phrases.
+   */
+  it("property: message structure holds for arbitrary orders", () => {
+    const lineItemArb = fc.record({
+      productId: fc.uuid(),
+      productName: fc.string({ minLength: 1, maxLength: 50 }).filter((s) => s.trim().length > 0),
+      size: fc.constantFrom("XS", "S", "M", "L", "XL", "XXL", "AllSize" as const),
+      quantity: fc.integer({ min: 1, max: 99 }),
+      unitPriceIDR: fc.integer({ min: 1000, max: 10_000_000 }),
+    });
+
+    const orderArb = fc.record({
+      orderId: fc.string({ minLength: 1, maxLength: 30 }).filter((s) => s.trim().length > 0),
+      customerName: fc.string({ minLength: 1, maxLength: 50 }).filter((s) => s.trim().length > 0),
+      customerWhatsApp: fc.stringMatching(/^\d{5,15}$/),
+      lineItems: fc.array(lineItemArb, { minLength: 1, maxLength: 10 }),
+      totalPriceIDR: fc.integer({ min: 0, max: 100_000_000 }),
+      status: fc.constant("PAYMENT_PENDING" as const),
+      trackingLink: fc.constant(null),
+      proofOfPaymentKey: fc.constant(null),
+      proofOfReceiptKey: fc.constant(null),
+      refundAmountIDR: fc.constant(null),
+      proofOfRefundKey: fc.constant(null),
+      createdAt: fc.constant("2025-01-01T00:00:00Z"),
+      updatedAt: fc.constant("2025-01-01T00:00:00Z"),
+    });
+
+    fc.assert(
+      fc.property(orderArb, (order: Order) => {
+        const msg = generateOrderSummaryMessage(order);
+        // Must contain customer name and order ID
+        expect(msg).toContain(order.customerName);
+        expect(msg).toContain(order.orderId);
+        // Must contain total as plain number
+        expect(msg).toContain(`Rp ${order.totalPriceIDR}`);
+        // Each line item must appear with correct plain-number line total
+        order.lineItems.forEach((item) => {
+          const lineTotal = item.quantity * item.unitPriceIDR;
+          expect(msg).toContain(`Rp ${lineTotal}`);
+        });
+        // Must contain closing phrases
+        expect(msg).toContain("Silakan lakukan pembayaran dan konfirmasi kepada kami.");
+        expect(msg).toContain("Terima kasih!");
+      }),
       { numRuns: 100 }
     );
   });
