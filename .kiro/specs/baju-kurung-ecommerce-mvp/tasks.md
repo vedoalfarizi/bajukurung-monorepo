@@ -169,7 +169,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
     - _Requirements: 2.3_
 
 - [ ] 12. Frontend — cart and checkout
-  - [ ] 12.1 Implement `CartDrawer`: display line items (name, size, quantity, unit price, line total), cart subtotal in IDR, remove item action
+  - [x] 12.1 Implement `CartDrawer`: display line items (name, size, quantity, unit price, line total), cart subtotal in IDR, remove item action
     - _Requirements: 4.2, 4.3, 4.4_
   - [ ] 12.2 Implement `CheckoutModal`: collect customerName and customerWhatsApp; validate non-empty; call `POST /orders`; on success call `generateOrderIntentLink()` and open WhatsApp deep link; handle API errors with toast + retry
     - _Requirements: 4.5, 4.6, 4.7, 4.8, 4.9_
