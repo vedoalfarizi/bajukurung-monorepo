@@ -162,7 +162,7 @@ Incremental implementation of a serverless AWS e-commerce platform for Malaysian
   - [ ]* 11.2 Write property test for available sizes constraint in size selector (Property 6)
     - **Property 6: Only available sizes are selectable for a product**
     - **Validates: Requirements 2.4**
-  - [ ] 11.3 Implement `ProductDetailPage`: fetch `GET /products/{productId}`, render all images, full description, fabric, colours, `SizeChartTable`, price, Pre-Order Window; wire add-to-cart with size selection validation
+  - [x] 11.3 Implement `ProductDetailPage`: fetch `GET /products/{productId}`, render all images, full description, fabric, colours, `SizeChartTable`, price, Pre-Order Window; wire add-to-cart with size selection validation
     - Display AllSize note when applicable; auto-select AllSize for AllSize-only products
     - _Requirements: 1.6, 2.3, 2.4, 2.5, 2.6_
   - [ ] 11.4 Implement `SizeChartTable`: render bust/waist/hip ranges per Standard Size from product's sizeChart; include AllSize descriptive note
